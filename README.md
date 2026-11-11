@@ -1,4 +1,4 @@
-# orca-sidenote
+# SideNote for Orca
 
 Write Markdown notes for Orca projects and worktrees in the right sidebar. The panel automatically shows the note for the focused project or worktree.
 
