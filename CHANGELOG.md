@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.2.1
+
+### Patch Changes
+
+- cb0738b: Rename the plugin to SideNote for Orca to meet the Orca plugin directory's display-name requirements.
+
 ## 0.2.0
 
 ### Minor Changes
