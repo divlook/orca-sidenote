@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 2,
+  "id": "sidenote",
+  "name": "orca-sidenote",
+  "version": "0.1.0",
+  "description": "A sidebar panel that automatically saves Markdown notes for each project and worktree",
+  "engines": { "orca": ">=1.4.248" },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.mjs",
+  "contributes": {
+    "panels": [{ "id": "sidenote", "title": "Note", "icon": "file-text", "entry": "src/panel.html", "ui": "html" }]
+  },
+  "capabilities": [{ "kind": "storage:own" }, { "kind": "workspace:read" }]
+}
