@@ -106,7 +106,7 @@ for (const tab of [editTab, previewTab]) {
   })
 }
 const subscription = orca.on('workspace.changed', followFocus)
-const themeSubscription = orca.on('theme', () => { source?.theme(); if (previewing) render() })
+const themeSubscription = orca.on('theme', () => { source?.theme() })
 window.addEventListener('pagehide', () => {
   subscription.dispose()
   themeSubscription.dispose()

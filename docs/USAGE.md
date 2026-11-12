@@ -8,7 +8,7 @@ The subtitle shows the current project and worktree. During **Switching…**, So
 
 ## Code blocks
 
-Preview highlights fenced code when its explicit language name or alias is supported by the bundled highlight.js library:
+Preview displays fenced code as escaped plain text, regardless of the language name:
 
 ````markdown
 ```typescript
@@ -17,7 +17,7 @@ console.log(message)
 ```
 ````
 
-Missing or unsupported names display escaped plain text. Preview does not guess the language. Mermaid fences display their source as ordinary code. Viewing a note does not change Source or saved text.
+Code blocks preserve whitespace without syntax highlighting. Mermaid fences display their source as ordinary code. Viewing a note does not change Source or saved text.
 
 ## Note settings
 

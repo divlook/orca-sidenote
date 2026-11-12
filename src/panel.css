@@ -26,28 +26,6 @@ article pre { overflow: auto; margin-block: 1em; padding: 12px; color: var(--orc
 article code { font-size: 12px; }
 article :not(pre) > code { color: var(--orca-foreground); background: var(--orca-muted);
   padding: .12em .32em; border: 1px solid var(--orca-border); border-radius: 4px; box-decoration-break: clone; }
-/* Paired syntax colors and canvas stay legible independently of host quiet fills. */
-article pre.highlighted-code { color: #24292f; background: #ffffff;
-  --syntax-keyword: #cf222e; --syntax-title: #6639ba; --syntax-value: #0550ae;
-  --syntax-string: #0a3069; --syntax-symbol: #953800; --syntax-comment: #57606a;
-  --syntax-tag: #116329; --syntax-addition: #dafbe1; --syntax-deletion: #ffebe9; }
-.dark article pre.highlighted-code { color: #c9d1d9; background: #0d1117;
-  --syntax-keyword: #ff7b72; --syntax-title: #d2a8ff; --syntax-value: #79c0ff;
-  --syntax-string: #a5d6ff; --syntax-symbol: #ffa657; --syntax-comment: #8b949e;
-  --syntax-tag: #7ee787; --syntax-addition: #033a16; --syntax-deletion: #67060c; }
-article pre.highlighted-code :is(.hljs-doctag, .hljs-keyword, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-variable.language_) { color: var(--syntax-keyword); }
-article pre.highlighted-code .hljs-title { color: var(--syntax-title); }
-article pre.highlighted-code :is(.hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-variable, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id) { color: var(--syntax-value); }
-article pre.highlighted-code :is(.hljs-regexp, .hljs-string, .hljs-meta .hljs-string) { color: var(--syntax-string); }
-article pre.highlighted-code :is(.hljs-built_in, .hljs-symbol) { color: var(--syntax-symbol); }
-article pre.highlighted-code :is(.hljs-comment, .hljs-code, .hljs-formula) { color: var(--syntax-comment); }
-article pre.highlighted-code :is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo) { color: var(--syntax-tag); }
-article pre.highlighted-code :is(.hljs-subst, .hljs-punctuation, .hljs-tag) { color: inherit; }
-article pre.highlighted-code :is(.hljs-section, .hljs-bullet) { color: var(--syntax-value); }
-article pre.highlighted-code :is(.hljs-section, .hljs-strong) { font-weight: bold; }
-article pre.highlighted-code .hljs-emphasis { font-style: italic; }
-article pre.highlighted-code .hljs-addition { color: var(--syntax-tag); background: var(--syntax-addition); }
-article pre.highlighted-code .hljs-deletion { color: var(--syntax-keyword); background: var(--syntax-deletion); }
 article a { color: var(--orca-foreground); text-decoration: underline; text-underline-offset: .15em; }
 article ul, article ol { padding-inline-start: 2em; }
 article .markdown-task-checkbox { margin: 0; vertical-align: middle; }

@@ -2,15 +2,15 @@
 
 Keep a Markdown note beside each Orca project or worktree. SideNote follows the focused location and saves edits automatically.
 
-![Source and Preview tabs of the same demo note, shown side by side](docs/images/sidenote.png)
+![Preview of a synthetic demo note with plain-text code blocks](docs/images/sidenote.png)
 
-*Source and Preview of a synthetic demo note, shown side by side. SideNote does not have a native split view.*
+*Preview of a synthetic demo note in the compiled panel, captured with an isolated browser host.*
 
 ## In this checkout
 
 - Keep separate notes for each host and folder path, including worktrees.
 - Write in Source with find and replace, line numbers, and per-note undo.
-- Read formatted Markdown in Preview, toggle tasks, and view highlighted code blocks.
+- Read formatted Markdown in Preview, toggle tasks, and view plain-text code blocks.
 - Back up and restore notes with a JSON file.
 
 Preview does not render diagrams or load images. See [Usage](docs/USAGE.md) for editing and [Data](docs/DATA.md) for backup and restore.

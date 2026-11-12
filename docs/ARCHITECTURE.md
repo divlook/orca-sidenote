@@ -11,11 +11,11 @@
 | Preview | [dialog.ts](../src/dialog.ts), [preview.ts](../src/preview.ts) | Preserve iframe keyboard behavior and HTML sanitization. |
 | Identity and positions | [protocol.ts](../src/protocol.ts), [source-text.ts](../src/source-text.ts), [markdown-tasks.ts](../src/markdown-tasks.ts), [markdown-list.ts](../src/markdown-list.ts) | Keep exact identities in one place. Share line-break counting while preserving exact source offsets and Monaco's canonical LF text. |
 
-Preview uses the full highlight.js library, including aliases. It highlights only explicit supported languages. Missing and unknown names remain escaped plain text. DOMPurify sanitizes highlighted output with the rest of the Markdown. Monaco's Source rules are independent. Mermaid uses the ordinary code path.
+Preview renders fenced code as escaped plain text regardless of language. DOMPurify sanitizes the rendered Markdown. Monaco's Source tokenization is independent. Mermaid uses the ordinary code path.
 
 Preserve Orca's guest resource and asset-session restrictions on remote images, fonts, stylesheets, and network calls.
 
-Source retains Monaco's light/dark syntax palettes. If the inherited comment color has insufficient contrast against an opaque host canvas, Source uses the host body foreground when it improves contrast. The check runs for same-scheme theme changes too. Transparent canvases retain the inherited palette. This is not a contrast guarantee for every theme or syntax token. Preview uses underlined body-colored links, semantic inline-code fills and borders, and a paired light/dark code palette.
+Source retains Monaco's light/dark syntax palettes. If the inherited comment color has insufficient contrast against an opaque host canvas, Source uses the host body foreground when it improves contrast. The check runs for same-scheme theme changes too. Transparent canvases retain the inherited palette. This is not a contrast guarantee for every theme or syntax token. Preview uses underlined body-colored links, semantic inline-code fills and borders, and host-colored plain code blocks.
 
 Orca's HTML panel transpiler does not resolve bare npm imports. [build.mjs](../build.mjs) bundles Preview and Monaco. The build converts Monaco's Codicon TTF and CSS declaration to WOFF. The [community registry](https://www.onorca.dev/plugins/add) permits WOFF but not TTF/OTF. Do not copy the original TTF into `dist/`. Monaco's notices cover the redistributed font.
 

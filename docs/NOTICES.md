@@ -9,7 +9,7 @@ Project code uses the [MIT LICENSE](../LICENSE). Third-party files retain their 
 | Monaco 0.57.0 | `dist/monaco-LICENSE.txt` and `dist/monaco-ThirdPartyNotices.txt`. |
 | marked 14.0.0 (Monaco dependency) | `dist/monaco-marked-LICENSE.txt`: MIT and John Gruber's BSD 3-Clause notice. |
 | DOMPurify 3.4.17 (Monaco sanitizer) | `dist/monaco-dompurify-LICENSE.txt` and `dist/monaco-dompurify-LICENSE-MPL.txt`. Preserve both. |
-| highlight.js 11.12.0 and bundled runtime contributors | `dist/licenses/INDEX.txt` names the contributing packages and full notices, including the highlight.js BSD-3-Clause notice. |
+| Bundled runtime contributors | `dist/licenses/INDEX.txt` names the contributing packages and their full notices. |
 
 [build.mjs](../build.mjs) copies full license texts and Monaco's ThirdPartyNotices from installed packages. It resolves Monaco's dependencies separately from Preview dependencies. It also copies full notices for npm packages contributing code to the panel/worker esbuild metafile. A missing package notice fails the build. Keep `dist/licenses/` with the bundles.
 

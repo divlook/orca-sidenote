@@ -1,13 +1,11 @@
 import { marked, Renderer, type Tokens } from 'marked'
 import DOMPurify from 'dompurify'
-import hljs from 'highlight.js'
 import { mapMarkdownTasks, type TaskMarker } from './markdown-tasks'
 
 export function createPreview(element: HTMLElement, openExternal: (href: string) => Promise<unknown>, failed: (error: unknown) => void,
   toggle: (key: string, text: string, marker: TaskMarker, epoch: number) => boolean) {
   let rendered: string | undefined
   let identity: string | null | undefined
-  let scheme = ''
   let generation = 0
   let editable = false
   let currentEpoch = 0
@@ -25,14 +23,12 @@ export function createPreview(element: HTMLElement, openExternal: (href: string)
       editable = ready
       currentEpoch = epoch
       for (const input of trustedInputs) input.disabled = !ready
-      const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-      if (rendered === text && identity === key && scheme === theme && renderedEpoch === epoch) return
+      if (rendered === text && identity === key && renderedEpoch === epoch) return
       const focused = document.activeElement instanceof HTMLInputElement && element.contains(document.activeElement)
         && identity === key ? document.activeElement.dataset.taskOffset : undefined
       const revision = ++generation
       renderedEpoch = epoch
       trustedInputs = []
-      scheme = theme
       identity = key
       const nonce = `preview-${crypto.randomUUID()}-`
       const renderer = new Renderer()
@@ -56,22 +52,6 @@ export function createPreview(element: HTMLElement, openExternal: (href: string)
         return ordinaryListItem({ ...token, tokens: [
           { ...paragraph, tokens: [checkbox, ...(paragraph as Tokens.Paragraph).tokens] }, ...token.tokens.slice(2)
         ] })
-      }
-      const ordinaryCode = renderer.code.bind(renderer)
-      renderer.code = token => {
-        const language = token.lang?.match(/^\S+/)?.[0]
-        if (!language || !hljs.getLanguage(language)) return ordinaryCode(token)
-        try {
-          // Match marked's displayed trailing newline before spans can enclose it.
-          const code = token.text.replace(/\n$/, '') + '\n'
-          const highlighted = hljs.highlight(code, { language, ignoreIllegals: true })
-          if (highlighted.errorRaised || !highlighted.value) return ordinaryCode(token)
-          return ordinaryCode({ ...token, text: '', escaped: true })
-            .replace('\n</code>', () => `${highlighted.value}</code>`)
-            .replace('<pre>', '<pre class="highlighted-code">')
-        } catch {
-          return ordinaryCode(token)
-        }
       }
       element.innerHTML = DOMPurify.sanitize(marked.parser(parsed.tokens, { renderer }), {
         USE_PROFILES: { html: true }, FORBID_TAGS: ['img', 'style', 'form'], FORBID_ATTR: ['style']
