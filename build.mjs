@@ -28,14 +28,32 @@ const monacoFont = {
   }
 }
 
+// Monaco 0.57.0 vendors an affected DOMPurify despite declaring an npm dependency.
+// Resolve that exact import to the official patched package, with a separate module
+// instance so Monaco's hooks and Trusted Types policy do not change Preview's state.
+const monacoSanitizer = {
+  name: 'monaco-dompurify',
+  setup(build) {
+    build.onResolve({ filter: /^\.\/dompurify\/dompurify\.js$/ }, async ({ importer }) => {
+      if (importer !== resolve('node_modules/monaco-editor/esm/vs/base/browser/domSanitize.js')) return
+      const result = await build.resolve('dompurify', { resolveDir: process.cwd(), kind: 'import-statement' })
+      return { ...result, suffix: '?monaco' }
+    })
+  }
+}
+
 await rm('dist', { recursive: true, force: true })
 await mkdir('dist', { recursive: true })
 const result = await build({
   entryPoints: { panel: 'src/panel.ts', 'editor.worker': 'src/editor.worker.ts' },
   outdir: 'dist', bundle: true, format: 'esm', splitting: true, minify: true,
-  target: 'es2022', assetNames: 'assets/[name]-[hash]', plugins: [monacoFont],
+  target: 'es2022', assetNames: 'assets/[name]-[hash]', plugins: [monacoFont, monacoSanitizer],
   external: ['orca', 'orca/*'], legalComments: 'linked', metafile: true
 })
+if (!Object.keys(result.metafile.inputs).some(input => input.endsWith('/dompurify/dist/purify.es.mjs?monaco'))
+  || Object.keys(result.metafile.inputs).some(input => /monaco-editor\/.*\/dompurify\//.test(input))) {
+  throw new Error('Monaco sanitizer did not resolve exclusively to patched DOMPurify. Review sanitizer resolution.')
+}
 await copyFile('node_modules/monaco-editor/LICENSE', 'dist/monaco-LICENSE.txt')
 await copyFile('node_modules/monaco-editor/ThirdPartyNotices.txt', 'dist/monaco-ThirdPartyNotices.txt')
 
@@ -45,6 +63,7 @@ const monacoRequire = createRequire(new URL('./node_modules/monaco-editor/packag
 for (const [resolver, dependency, license, destination] of [
   [require, 'marked', 'LICENSE.md', 'marked-LICENSE.txt'],
   [require, 'dompurify', 'LICENSE', 'dompurify-LICENSE.txt'],
+  [require, 'dompurify', 'LICENSE-MPL', 'dompurify-LICENSE-MPL.txt'],
   [monacoRequire, 'marked', 'LICENSE.md', 'monaco-marked-LICENSE.txt'],
   [monacoRequire, 'dompurify', 'LICENSE', 'monaco-dompurify-LICENSE.txt'],
   [monacoRequire, 'dompurify', 'LICENSE-MPL', 'monaco-dompurify-LICENSE-MPL.txt']
