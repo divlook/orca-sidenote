@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.4.2
+
+### Patch Changes
+
+- 559fb34: Show the existing Preview image as the plugin page cover.
+
 ## 0.4.1
 
 ### Patch Changes
