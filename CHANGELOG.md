@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.4.1
+
+### Patch Changes
+
+- 20d7748: Add Source and Preview screenshots to the community plugin gallery.
+
 ## 0.4.0
 
 ### Minor Changes
