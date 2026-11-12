@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "id": "sidenote",
   "name": "SideNote for Orca",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "A sidebar panel that automatically saves Markdown notes for each project and worktree",
   "engines": { "orca": ">=1.4.248" },
   "execution": "trusted-worker",
