@@ -33,6 +33,8 @@ On macOS, **Cmd+Option+Up/Down** adds a cursor above or below. Typing edits all 
 
 Enter continues unordered lists, increments ordered lists, and creates unchecked tasks. Indentation is preserved. Enter on an empty item exits that list level. Ordered markers use at most nine digits and repeat the maximum number when reached. Quoted lists, literal code or HTML, selections, and mixed list/non-list cursor groups retain normal Enter behavior. Pasted Markdown is not rewritten.
 
+Right-click Source for **Change All Occurrences**, **Cut**, **Copy**, and **Paste**. Clipboard permission failures leave the note unchanged and show an error. The Source editor uses CodeMirror; existing notes and storage formats do not change.
+
 If saving fails, your text stays in the panel. Select **Retry save**. Closing the panel or quitting the app while saving has failed may lose unsaved text.
 
 ## Your notes

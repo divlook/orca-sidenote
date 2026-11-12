@@ -20,16 +20,15 @@ export function countSourceLineBreaks(text: string): number {
   return count
 }
 
-type SourceChange = { range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }; text: string }
+type SourceChange = { from: number; to: number; text: string }
 
-// Monaco's changes are ordered from the end of the document to the beginning.
+// Raw UTF-16 ranges are ordered from the end of the source to the beginning.
 export function applySourceChanges(text: string, changes: readonly SourceChange[]): string {
-  const starts = sourceLineStarts(text)
   let result = text
   let previous = text.length
   for (const change of changes) {
-    const start = starts[change.range.startLineNumber - 1] + change.range.startColumn - 1
-    const end = starts[change.range.endLineNumber - 1] + change.range.endColumn - 1
+    const start = change.from
+    const end = change.to
     if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > previous) {
       throw new Error('The editor source range could not be verified.')
     }

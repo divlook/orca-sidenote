@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build and release tests
+    name: Build and behavior tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -25,3 +25,4 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:release
+      - run: npm run test:editor

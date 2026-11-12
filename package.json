@@ -9,22 +9,24 @@
     "changeset": "changeset",
     "version:plugin": "node scripts/version-plugin.mjs",
     "version:release": "npm run version:plugin && npm run build",
-    "test:release": "node --test scripts/release-plugin.test.mjs"
+    "test:release": "node --test scripts/release-plugin.test.mjs",
+    "test:editor": "node --test scripts/source-*.test.mjs"
   },
   "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@lezer/highlight": "1.2.3",
     "dompurify": "3.4.17",
-    "marked": "17.0.1",
-    "monaco-editor": "0.57.0"
-  },
-  "overrides": {
-    "dompurify": "$dompurify"
+    "marked": "17.0.1"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1",
     "@types/trusted-types": "2.0.7",
     "esbuild": "0.28.2",
-    "ttf2woff": "3.0.0",
-    "type-fest": "4.41.0",
     "typescript": "5.9.3"
   }
 }

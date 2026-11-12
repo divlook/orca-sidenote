@@ -31,7 +31,7 @@ Disabling needs no approval. Re-enabling a disabled code-running plugin needs ap
 | --- | --- |
 | `Not saved` / `Retry save` | Keep the panel open and copy the text elsewhere. Inspect the error, select **Retry save**, and check for `Saved`. A failed draft may exist only in panel memory. |
 | `Location unavailable` / `Switching…` | Check the active worktree and installed CLI path. Run the read-only query below. Incomplete or ambiguous results block editing to protect notes. |
-| `Editor unavailable` | Check bundles and worker assets. Inspect build errors. Preserve unsaved text before rebuilding or reloading. Keep worker preflight enabled. |
+| `Editor unavailable` | Check the panel bundle and build errors. Preserve unsaved text before rebuilding or reloading. Keep fail-closed editor readiness enabled. |
 | `Settings unavailable` | Inspect the settings error. Use the explicit replacement procedure in [Usage](USAGE.md#note-settings). Do not reset note storage. |
 | Preview link error | Inspect the error. A failed link must not clear the note or disable editing. |
 

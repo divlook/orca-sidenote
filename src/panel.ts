@@ -30,6 +30,7 @@ bindDialog(shortcutsHelp, shortcutsOpen, shortcutsClose)
 let previewing = false
 let source: SourceEditor | undefined
 let editorError = ''
+let disposed = false
 let externalError = ''
 let limitMessage = ''
 const session = new NoteSession(orca.storage, render)
@@ -108,6 +109,7 @@ for (const tab of [editTab, previewTab]) {
 const subscription = orca.on('workspace.changed', followFocus)
 const themeSubscription = orca.on('theme', () => { source?.theme() })
 window.addEventListener('pagehide', () => {
+  disposed = true
   subscription.dispose()
   themeSubscription.dispose()
   source?.dispose()
@@ -120,6 +122,7 @@ void createSourceEditor(editor, (key, text) => {
   limitMessage = `Notes are limited to ${settings.view.limit} characters. The edit was not applied.`
   render()
 }).then(value => {
+  if (disposed) { value.dispose(); return }
   source = value
   render()
 }).catch(editorFailed)

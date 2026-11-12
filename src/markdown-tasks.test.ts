@@ -1,7 +1,7 @@
 import { assert, test } from 'orca/testing'
 import { marked } from '../node_modules/marked/lib/marked.esm.js'
 import { mapMarkdownTasks } from './markdown-tasks'
-import { applySourceChanges, sourceLineStarts } from './source-text'
+import { applySourceChanges } from './source-text'
 
 const parseMarkdownTasks = (text: string) => mapMarkdownTasks(text, marked.lexer(text))
 
@@ -44,14 +44,11 @@ test('loose list and same-line nested quote/list prefixes retain structural posi
 test('task edits preserve mixed and standalone CR line endings byte-for-byte', () => {
   for (const text of ['😀 intro\r\r- [ ] first\r- [X] second\r', '😀 intro\r\n\n- [ ] first\n- [X] second\r\n']) {
     const { markers } = parseMarkdownTasks(text)
-    const starts = sourceLineStarts(text)
     const expectedOffsets = text.startsWith('😀 intro\r\r') ? [13, 25] : [14, 26]
     assert.deepEqual([...markers.values()].map(marker => marker.offset), expectedOffsets)
     for (const marker of markers.values()) {
-      const line = starts.findLastIndex(start => start <= marker.offset)
-      const column = marker.offset - starts[line] + 1
       const next = applySourceChanges(text, [{
-        range: { startLineNumber: line + 1, startColumn: column, endLineNumber: line + 1, endColumn: column + 1 },
+        from: marker.offset, to: marker.offset + 1,
         text: marker.marker === ' ' ? 'x' : ' '
       }])
       assert.equal(next, text.slice(0, marker.offset) + (marker.marker === ' ' ? 'x' : ' ') + text.slice(marker.offset + 1))

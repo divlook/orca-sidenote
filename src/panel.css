@@ -99,3 +99,13 @@ button:disabled { cursor: default; opacity: .5; }
 #transfer-candidates legend { max-width: 100%; overflow-wrap: anywhere; }
 #transfer-candidates select, #transfer-file { max-width: 100%; font: inherit; }
 #transfer-candidates select { width: 100%; color: var(--orca-foreground); background: var(--orca-background); }
+.source-context-menu { position: fixed; z-index: 100; max-width: calc(100vw - 12px);
+  padding: 4px; border: 1px solid var(--orca-border); border-radius: 5px;
+  color: var(--orca-popover-foreground, var(--orca-foreground));
+  background: var(--orca-popover, var(--orca-background)); box-shadow: 0 4px 14px rgb(0 0 0 / 25%); }
+.source-context-menu button { display: block; width: 100%; padding: 5px 12px; text-align: left; color: inherit; }
+.source-context-menu button:hover, .source-context-menu button:focus-visible { background: var(--orca-muted); }
+.source-context-menu button:first-child { border-bottom: 1px solid var(--orca-border); }
+.source-context-message { max-width: 240px; padding: 4px; font-size: 12px; color: var(--orca-destructive); }
+.source-context-message:empty { display: none; }
+.source-context-shortcut { float: right; margin-left: 24px; color: var(--orca-muted-foreground); }

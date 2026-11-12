@@ -1,24 +1,14 @@
-import * as monaco from 'monaco-editor/editor/editor.api.js'
-import 'monaco-editor/editor/browser/coreCommands.js'
-import 'monaco-editor/editor/contrib/tokenization/browser/tokenization.js'
-import '../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css'
-import '../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css'
-import 'monaco-editor/editor/contrib/find/browser/findController.js'
-import 'monaco-editor/editor/contrib/clipboard/browser/clipboard.js'
-import 'monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js'
-import 'monaco-editor/editor/contrib/wordOperations/browser/wordOperations.js'
-import 'monaco-editor/editor/contrib/linesOperations/browser/linesOperations.js'
-import 'monaco-editor/editor/contrib/multicursor/browser/multicursor.js'
-import { conf, language } from 'monaco-editor/languages/definitions/markdown/markdown.js'
-import { allowsNoteChange, DEFAULT_NOTE_LIMIT, type NoteLimit } from './note-settings'
-import { EDITOR_WORKER_READY } from './protocol'
-import { markdownListItemLines } from './markdown-list'
+import { Compartment, EditorState, Prec, type StateEffect } from '@codemirror/state'
+import { EditorView, crosshairCursor, drawSelection, dropCursor, keymap, lineNumbers, rectangularSelection } from '@codemirror/view'
+import { addCursorAbove, addCursorBelow, deleteLine, historyKeymap, indentLess, indentMore, indentWithTab, simplifySelection, standardKeymap } from '@codemirror/commands'
+import { closeSearchPanel, openSearchPanel, search, searchKeymap } from '@codemirror/search'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { DEFAULT_NOTE_LIMIT, type NoteLimit } from './note-settings'
 import type { TaskMarker } from './markdown-tasks'
-import { applySourceChanges, canonicalSource, sourceLineStarts } from './source-text'
-
-monaco.languages.register({ id: 'markdown' })
-monaco.languages.setLanguageConfiguration('markdown', conf)
-monaco.languages.setMonarchTokensProvider('markdown', language)
+import { acceptSourceTransaction, documentPosition, exactSource, rawPosition, sourceEOL, sourceExtensions, sourceField } from './source-state'
+import { allOccurrences, insertLine, lineEndCursors, lineOperation, listEnter, nextOccurrence, occurrenceSession, rawEdit } from './source-commands'
+import { pasteSource, selectedSource, sourceMenu, type SourceClipboard } from './source-menu'
+import { sourceTheme } from './source-theme'
 
 export interface SourceEditor {
   sync(key: string, text: string, ready: boolean, limit: NoteLimit, epoch: number, invalidations?: ReadonlyMap<string, number>): void
@@ -30,244 +20,169 @@ export interface SourceEditor {
 }
 export async function createSourceEditor(container: HTMLElement, changed: (key: string, text: string) => void,
   failed: (error: unknown) => void, limited: () => void): Promise<SourceEditor> {
-  const workers = new Set<Worker>()
-  function startWorker(): Promise<Worker> {
-    const { promise, resolve, reject } = Promise.withResolvers<Worker>()
-    const worker = new Worker(new URL('./editor.worker.js', import.meta.url), { type: 'module', name: 'sidenote-editor' })
-    workers.add(worker)
-    const timer = setTimeout(() => { worker.terminate(); reject(new Error('The local editor worker did not start.')) }, 10000)
-    worker.addEventListener('error', event => {
-      clearTimeout(timer)
-      const error = new Error(`The local editor worker failed: ${event.message || 'Unable to load worker assets.'}`)
-      reject(error)
-      failed(error)
-    })
-    worker.addEventListener('message', function ready(event) {
-      if (event.data?.type !== EDITOR_WORKER_READY) return
-      clearTimeout(timer)
-      worker.removeEventListener('message', ready)
-      resolve(worker)
-    })
-    return promise
-  }
-  let firstWorker: Worker | undefined = await startWorker()
-  globalThis.MonacoEnvironment = { getWorker: () => {
-    if (firstWorker) { const worker = firstWorker; firstWorker = undefined; return worker }
-    return startWorker().catch(error => { failed(error); throw error })
-  } }
-  const editor = monaco.editor.create(container, {
-    model: null, readOnly: true, ariaLabel: 'Note source', minimap: { enabled: false },
-    wordWrap: 'on', lineNumbers: 'on', scrollBeyondLastLine: false, fontSize: 13,
-    lineNumbersMinChars: 2, folding: false, automaticLayout: false,
-    padding: { top: 12, bottom: 12 }, quickSuggestions: false,
-    unicodeHighlight: { ambiguousCharacters: false }, renderLineHighlight: 'none'
-  })
-  type Entry = { model: monaco.editor.ITextModel; view: monaco.editor.ICodeEditorViewState | null }
-  const entries = new Map<string, Entry>()
-  let key = ''
-  let restoring = false
-  let enabled = false
+  type Entry = { state: EditorState; scroll?: StateEffect<unknown> }
+  const entries = new Map<string, Entry>(), invalidated = new Map<string, number>()
+  const writable = new Compartment(), numbers = new Compartment(), palette = new Compartment()
+  let key = '', enabled = false, disposed = false, broken = false, epoch = 0, revision = 0, visibleNumbers = true
   let limit: NoteLimit = DEFAULT_NOTE_LIMIT
-  let epoch = 0
-  let lineNumbers = true
-  let revision = 0
-  const invalidated = new Map<string, number>()
-  function theme() {
-    const style = getComputedStyle(document.documentElement)
-    const color = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
-    const dark = document.documentElement.classList.contains('dark')
-    const background = color('--orca-background', dark ? '#1e1e1e' : '#ffffff')
-    const foreground = color('--orca-foreground', dark ? '#d4d4d4' : '#333333')
-    // Monaco's inherited comment palette is not paired with the host canvas.
-    const comment = dark ? '#608b4e' : '#008000'
-    const canvas = document.createElement('canvas')
-    canvas.width = canvas.height = 1
-    const context = canvas.getContext('2d')!
-    const sample = (value?: string) => {
-      context.clearRect(0, 0, 1, 1)
-      context.fillStyle = background
-      context.fillRect(0, 0, 1, 1)
-      if (value) {
-        context.fillStyle = value
-        context.fillRect(0, 0, 1, 1)
-      }
-      return context.getImageData(0, 0, 1, 1).data
-    }
-    const luminance = (rgb: Uint8ClampedArray) => {
-      return [0.2126, 0.7152, 0.0722].reduce((sum, weight, index) => {
-        const channel = rgb[index] / 255
-        return sum + weight * (channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
-      }, 0)
-    }
-    const bg = luminance(sample())
-    const contrast = (value: string) => {
-      const fg = luminance(sample(value))
-      return (Math.max(bg, fg) + .05) / (Math.min(bg, fg) + .05)
-    }
-    const rules: monaco.editor.ITokenThemeRule[] = []
-    if (sample()[3] === 255 && contrast(comment) < 4.5 && contrast(foreground) > contrast(comment)) {
-      const rgb = sample(foreground)
-      rules.push({ token: 'comment', foreground: [...rgb.slice(0, 3)].map(channel => channel.toString(16).padStart(2, '0')).join('') })
-    }
-    monaco.editor.defineTheme('sidenote', { base: dark ? 'vs-dark' : 'vs', inherit: true, rules, colors: {
-      'editor.background': background,
-      'editor.foreground': foreground,
-      'editorLineNumber.foreground': color('--orca-muted-foreground', '#888888'),
-      'editorWidget.background': color('--orca-popover', dark ? '#252526' : '#f3f3f3'),
-      'editorWidget.foreground': color('--orca-popover-foreground', dark ? '#d4d4d4' : '#333333'),
-      'editorWidget.border': color('--orca-border', '#888888')
-    } })
-    monaco.editor.setTheme('sidenote')
+  const clipboard: SourceClipboard = {}
+  let drag: { state: EditorState; ranges: readonly { from: number; to: number }[]; text: string } | undefined
+  const active = () => !disposed && !broken && enabled && !!key && entries.get(key)?.state === view.state
+  function extensions(text: string) {
+    return [sourceExtensions(text), occurrenceSession, EditorState.allowMultipleSelections.of(true),
+      writable.of([EditorState.readOnly.of(!enabled), EditorView.editable.of(enabled)]),
+      numbers.of(visibleNumbers ? lineNumbers() : []), palette.of(sourceTheme()),
+      EditorView.contentAttributes.of({ 'aria-label': 'Note source', 'aria-multiline': 'true' }),
+      EditorView.lineWrapping, drawSelection(), dropCursor(), rectangularSelection(), crosshairCursor(),
+      EditorView.clickAddsSelectionRange.of(event => event.altKey),
+      markdown({ base: markdownLanguage, addKeymap: false, completeHTMLTags: false, pasteURLAsLink: false }), search({ top: true }),
+      Prec.highest(keymap.of([
+        { key: 'Enter', run: listEnter },
+        { key: 'Mod-Alt-f', run: editor => { openSearchPanel(editor); editor.dom.querySelector<HTMLInputElement>('input[name="replace"]')?.focus(); return true }, scope: 'editor search-panel' },
+        { key: 'Escape', run: editor => closeSearchPanel(editor) || simplifySelection(editor), scope: 'editor search-panel' },
+        { key: 'Alt-ArrowUp', run: lineOperation(-1, false) }, { key: 'Alt-ArrowDown', run: lineOperation(1, false) },
+        { key: 'Alt-Shift-ArrowUp', run: lineOperation(-1, true) }, { key: 'Alt-Shift-ArrowDown', run: lineOperation(1, true) },
+        { key: 'Mod-Shift-k', run: deleteLine },
+        { key: 'Mod-Enter', run: insertLine(false) }, { key: 'Mod-Shift-Enter', run: insertLine(true) },
+        { key: 'Mod-Alt-ArrowUp', run: addCursorAbove }, { key: 'Mod-Alt-ArrowDown', run: addCursorBelow },
+        { key: 'Mod-d', run: nextOccurrence }, { key: 'Mod-Shift-l', run: allOccurrences }, { key: 'Mod-F2', run: allOccurrences },
+        { key: 'Alt-Shift-i', run: lineEndCursors }, { key: 'Mod-]', run: indentMore }, { key: 'Mod-[', run: indentLess },
+        indentWithTab, ...searchKeymap, ...historyKeymap, ...standardKeymap
+      ])),
+      EditorView.exceptionSink.of(error => { if (!disposed) { broken = true; failed(error) } }),
+      EditorView.domEventHandlers({
+        paste(event, editor) {
+          if (!active() || editor.state.readOnly) return true
+          const text = event.clipboardData?.getData('text/plain')
+          if (text === undefined) return false
+          const linewise = event.clipboardData?.getData('application/x-sidenote-lines') === 'true'
+            || clipboard.copied?.text === text && clipboard.copied.linewise
+          event.preventDefault(); pasteSource(editor, text, linewise); return true
+        },
+        copy(event, editor) {
+          if (!event.clipboardData) return false
+          const { text, linewise } = selectedSource(editor.state)
+          event.clipboardData.setData('text/plain', text)
+          event.clipboardData.setData('application/x-sidenote-lines', String(linewise))
+          clipboard.copied = { text, linewise }
+          event.preventDefault(); return true
+        },
+        cut(event, editor) {
+          if (!active() || editor.state.readOnly) return true
+          if (!event.clipboardData) return false
+          const { ranges, text, linewise } = selectedSource(editor.state)
+          event.clipboardData.setData('text/plain', text)
+          event.clipboardData.setData('application/x-sidenote-lines', String(linewise))
+          clipboard.copied = { text, linewise }
+          event.preventDefault(); editor.dispatch({ changes: ranges.map(range => ({ from: range.from, to: range.to })), userEvent: 'delete.cut' }); return true
+        },
+        dragstart(event, editor) {
+          const ranges = editor.state.selection.ranges.filter(range => !range.empty)
+          if (!ranges.length || !event.dataTransfer) return false
+          const raw = editor.state.field(sourceField)
+          drag = { state: editor.state, ranges, text: ranges.map(range => raw.slice(rawPosition(editor.state, range.from), rawPosition(editor.state, range.to))).join(editor.state.facet(sourceEOL)) }
+          event.dataTransfer.setData('text/plain', drag.text)
+          return false
+        },
+        dragend() { drag = undefined; return false },
+        drop(event, editor) {
+          if (!active() || editor.state.readOnly) { drag = undefined; return true }
+          const at = editor.posAtCoords({ x: event.clientX, y: event.clientY }), text = event.dataTransfer?.getData('text/plain')
+          if (at === null || text === undefined) return false
+          event.preventDefault()
+          const moving = drag?.state === editor.state && !event.altKey && !event.ctrlKey
+          if (moving && drag!.ranges.some(range => at >= range.from && at <= range.to)) { drag = undefined; return true }
+          const edits = [...(moving ? drag!.ranges.map(range => ({ ...range, insert: '' })) : []), { from: at, to: at, insert: moving ? drag!.text : text }].sort((a, b) => a.from - b.from)
+          const spec = rawEdit(editor.state, edits, { userEvent: moving ? 'move.drop' : 'input.drop', scrollIntoView: true })
+          const changes = editor.state.changes(spec.changes ?? [])
+          editor.dispatch({ ...spec, changes, selection: { anchor: changes.mapPos(at, -1), head: changes.mapPos(at, 1) } })
+          editor.focus()
+          drag = undefined; return true
+        }
+      })]
   }
-  theme()
-  const observer = new ResizeObserver(() => { if (!container.hidden) editor.layout() })
-  observer.observe(container)
-  editor.onKeyDown(event => {
-    if (!enabled || event.keyCode !== monaco.KeyCode.Enter || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.browserEvent.isComposing) return
-    const model = editor.getModel()
-    const selections = editor.getSelections()
-    if (!model || !selections?.length || selections.some(selection => !selection.isEmpty())) return
-    const edits: monaco.editor.IIdentifiedSingleEditOperation[] = []
-    const lines = new Set<number>()
-    let itemLines: Set<number> | undefined
-    for (const selection of selections) {
-      const lineNumber = selection.positionLineNumber
-      if (lines.has(lineNumber)) return
-      lines.add(lineNumber)
-      const line = model.getLineContent(lineNumber)
-      const item = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+)(?:\[([ xX])\]([ \t]+|$))?/.exec(line)
-      if (!item || selection.positionColumn <= item[0].length) return
-      itemLines ??= markdownListItemLines(model.getValue())
-      if (!itemLines.has(lineNumber)) return
-      if (!line.slice(item[0].length).trim()) {
-        const indent = item[1].replace(/(?:\t| {1,4})$/, '')
-        edits.push({ range: new monaco.Range(lineNumber, 1, lineNumber, line.length + 1), text: indent })
-      } else {
-        const ordered = /^(\d+)([.)])$/.exec(item[2])
-        const marker = ordered ? `${Math.min(Number(ordered[1]) + 1, 999999999)}${ordered[2]}` : item[2]
-        const prefix = `${item[1]}${marker}${item[3]}${item[4] === undefined ? '' : '[ ] '}`
-        edits.push({ range: selection, text: model.getEOL() + prefix })
-      }
+  const view = new EditorView({ parent: container, state: EditorState.create({ extensions: extensions('') }),
+    dispatchTransactions(transactions, editor) {
+      if (disposed) return
+      const originKey = key, originEpoch = epoch, entry = entries.get(originKey)
+      let originRevision = revision
+      try {
+        for (const transaction of transactions) {
+          if (transaction.startState !== editor.state) throw new Error('The editor transaction is stale.')
+          const current = !broken && enabled && key === originKey && revision === originRevision && epoch === originEpoch && entries.get(originKey) === entry
+          // Blocked DOM/programmatic input never enters history. A previously
+          // writable candidate is resolved synchronously before any readiness change.
+          if ((transaction.docChanged || transaction.effects.some(effect => effect.is(exactSource))) && (!current || transaction.startState.readOnly)) continue
+          const result = acceptSourceTransaction(transaction, limit, current)
+          if (result.rejected) {
+            if (!result.restoration) throw new Error('The editor rejected an unexpected read-only transaction.')
+            editor.update([transaction, result.restoration])
+            if (entry) entry.state = result.state
+            if (current) limited()
+          } else {
+            editor.update([transaction])
+            if (entry) entry.state = editor.state
+            if (editor.state.field(sourceField) !== transaction.startState.field(sourceField) && current && entry) {
+              originRevision = ++revision
+              changed(originKey, editor.state.field(sourceField))
+            }
+          }
+        }
+      } catch (error) { broken = true; failed(error) }
     }
-    event.preventDefault()
-    event.stopPropagation()
-    editor.pushUndoStop()
-    editor.executeEdits('markdown-list-enter', edits)
-    editor.pushUndoStop()
   })
+  if (broken) { view.destroy(); throw new Error('The Source editor could not be initialized.') }
+  // Let CM initialize native dragging, then replace its canonical clipboard text
+  // at the outer DOM listener with the exact payload captured for that event.
+  const exactDrag = (event: DragEvent) => { if (drag?.state === view.state) event.dataTransfer?.setData('text/plain', drag.text) }
+  view.dom.addEventListener('dragstart', exactDrag)
+  const removeMenu = sourceMenu(view, () => disposed || !key ? null : revision, clipboard)
+  const observer = new ResizeObserver(() => { if (!disposed && !container.hidden) view.requestMeasure() })
+  observer.observe(container)
+  function configure() {
+    view.dispatch({ effects: [writable.reconfigure([EditorState.readOnly.of(!enabled), EditorView.editable.of(enabled)]), numbers.reconfigure(visibleNumbers ? lineNumbers() : []), palette.reconfigure(sourceTheme())] })
+  }
   return {
-    sync(nextKey: string, text: string, ready: boolean, nextLimit: NoteLimit, nextEpoch: number, invalidations?: ReadonlyMap<string, number>) {
+    sync(nextKey, text, ready, nextLimit, nextEpoch, invalidations) {
+      if (disposed) return
+      ready = ready && !broken
       for (const [changedKey, version] of invalidations ?? []) {
         if (invalidated.get(changedKey) === version) continue
-        invalidated.set(changedKey, version)
-        const entry = entries.get(changedKey)
-        if (entry) {
-          revision++
-          if (key === changedKey) { editor.setModel(null); key = '' }
-          entry.model.dispose()
-          entries.delete(changedKey)
-        }
+        invalidated.set(changedKey, version); entries.delete(changedKey); revision++
+        if (key === changedKey) key = ''
       }
-      if (epoch !== nextEpoch) {
-        revision++
-        editor.setModel(null)
-        for (const entry of entries.values()) entry.model.dispose()
-        entries.clear()
-        key = ''
-        epoch = nextEpoch
-      }
-      if (nextKey !== key || enabled !== ready) revision++
+      if (epoch !== nextEpoch) { entries.clear(); key = ''; epoch = nextEpoch; revision++ }
+      if (key !== nextKey || enabled !== ready) revision++
       limit = nextLimit
+      const changedReady = enabled !== ready
       enabled = ready
-      editor.updateOptions({ readOnly: !ready })
-      if (nextKey !== key && key) {
-        entries.get(key)!.view = editor.saveViewState()
-        editor.setModel(null)
-        key = ''
+      if (key !== nextKey && key) {
+        const previous = entries.get(key)
+        if (previous) { previous.state = view.state; previous.scroll = view.scrollSnapshot() }
       }
-      if (!ready || nextKey === key) return
-      let entry = entries.get(nextKey)
-      if (!entry) {
-        const model = monaco.editor.createModel(text, 'markdown')
-        entry = { model, view: null }
-        entries.set(nextKey, entry)
-        let acceptedText = text
-        let sourceText = text
-        const sourceVersions = new Map([[model.getAlternativeVersionId(), text]])
-        model.onDidChangeContent(event => {
-          if (restoring) return
-          const version = model.getAlternativeVersionId()
-          let nextText: string
-          try {
-            nextText = ((event.isUndoing || event.isRedoing) ? sourceVersions.get(version) : undefined)
-              ?? applySourceChanges(sourceText, event.changes)
-            if (canonicalSource(nextText) !== model.getValue(monaco.editor.EndOfLinePreference.LF)) {
-              throw new Error('The editor source text could not be verified.')
-            }
-          } catch (error) { failed(error); return }
-          sourceText = nextText
-          sourceVersions.set(version, nextText)
-          const editRevision = revision
-          // Finish the current Monaco edit transaction before touching its undo stack.
-          queueMicrotask(() => {
-            if (model.isDisposed()) return
-            const stale = !enabled || key !== nextKey || editRevision !== revision
-            if (stale || !allowsNoteChange(acceptedText, nextText, limit)) {
-              restoring = true
-              try {
-                if (event.isUndoing) model.redo()
-                else model.undo()
-                sourceText = acceptedText
-                if (model.getValue(monaco.editor.EndOfLinePreference.LF) !== canonicalSource(acceptedText)) {
-                  throw new Error('The editor could not restore the note after a rejected edit.')
-                }
-              } catch (error) { failed(error) } finally { restoring = false }
-              if (!stale) limited()
-              return
-            }
-            acceptedText = nextText
-            // Isolate each input transaction so rejecting a later paste cannot undo earlier typing.
-            if (!event.isUndoing && !event.isRedoing) model.pushStackElement()
-            changed(nextKey, acceptedText)
-          })
-        })
-      }
-      key = nextKey
-      editor.setModel(entry.model)
-      if (entry.view) editor.restoreViewState(entry.view)
+      if (!ready) { if (changedReady) configure(); return }
+      if (key !== nextKey) {
+        let entry = entries.get(nextKey)
+        if (!entry) { entry = { state: EditorState.create({ doc: text, extensions: extensions(text) }) }; entries.set(nextKey, entry) }
+        key = nextKey; view.setState(entry.state); configure()
+        if (entry.scroll) view.dispatch({ effects: entry.scroll })
+        view.requestMeasure()
+      } else if (changedReady) configure()
     },
-    setLineNumbers(visible: boolean) {
-      if (visible === lineNumbers) return
-      lineNumbers = visible
-      editor.updateOptions({ lineNumbers: visible ? 'on' : 'off' })
+    setLineNumbers(visible) {
+      if (disposed || visible === visibleNumbers) return
+      visibleNumbers = visible
+      view.dispatch({ effects: numbers.reconfigure(visible ? lineNumbers() : []) })
     },
     toggleTask(expectedKey, text, marker, expectedEpoch) {
-      const model = editor.getModel()
-      if (!enabled || expectedKey !== key || expectedEpoch !== epoch || !model
-        || model.getValue(monaco.editor.EndOfLinePreference.LF) !== canonicalSource(text)
+      if (!active() || expectedKey !== key || expectedEpoch !== epoch || view.state.field(sourceField) !== text
         || text[marker.offset] !== marker.marker || text[marker.offset - 1] !== '[' || text[marker.offset + 1] !== ']') return false
-      const starts = sourceLineStarts(text)
-      let line = 0
-      while (line + 1 < starts.length && starts[line + 1] <= marker.offset) line++
-      const column = marker.offset - starts[line] + 1
-      const view = editor.saveViewState()
-      editor.pushUndoStop()
-      const applied = editor.executeEdits('preview-task', [{
-        range: new monaco.Range(line + 1, column, line + 1, column + 1),
-        text: marker.marker === ' ' ? 'x' : ' '
-      }])
-      editor.pushUndoStop()
-      if (view) editor.restoreViewState(view)
-      return applied
+      const position = documentPosition(view.state, marker.offset), scroll = view.scrollSnapshot()
+      view.dispatch({ changes: { from: position, to: position + 1, insert: marker.marker === ' ' ? 'x' : ' ' }, effects: scroll, userEvent: 'input.task' })
+      return true
     },
-    show(focus: boolean) { editor.layout(); if (focus && enabled) editor.focus() },
-    theme,
-    dispose() {
-      observer.disconnect()
-      editor.dispose()
-      for (const entry of entries.values()) entry.model.dispose()
-      for (const worker of workers) worker.terminate()
-    }
+    show(focus) { if (!disposed) { view.requestMeasure(); if (focus && enabled) view.focus() } },
+    theme() { if (!disposed) view.dispatch({ effects: palette.reconfigure(sourceTheme()) }) },
+    dispose() { if (disposed) return; disposed = true; enabled = false; revision++; observer.disconnect(); removeMenu(); view.dom.removeEventListener('dragstart', exactDrag); view.destroy(); entries.clear(); drag = undefined }
   }
 }
-

@@ -16,8 +16,6 @@ export function noteKey(workspace: NoteTarget): string {
   return NOTE_KEY_PREFIX + JSON.stringify([workspace.hostId, workspace.path])
 }
 
-export const EDITOR_WORKER_READY = 'sidenote-worker-ready'
-
 declare module 'orca' {
   interface PluginRequests {
     'notes.focused': { output: NoteTarget | null }

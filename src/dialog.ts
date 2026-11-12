@@ -16,7 +16,7 @@ export function bindDialog(dialog: HTMLDialogElement, opener: HTMLButtonElement,
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
   })
-  // Consume Escape before Monaco or the host can change editor/panel state.
+  // Consume Escape before the editor or host can change panel state.
   window.addEventListener('keydown', event => {
     if (!dialog.open || event.key !== 'Escape' || [...document.querySelectorAll('dialog[open]')].at(-1) !== dialog) return
     event.preventDefault()
