@@ -1,5 +1,17 @@
 # orca-sidenote
 
+## 0.3.0
+
+### Minor Changes
+
+- b0d73c9: Add versioned JSON notes backup and restore with separate recovery drafts, conflict previews, saved protection before replacements, and partial-result reporting. Preserve exact note text and identities without transferring settings or undo history.
+
+  Refresh stale saved notes during restore preview, including identical skips, so later edits do not overwrite newer stored text. Keep unsaved drafts and unchanged notes' undo history.
+
+  Show a DEV badge beside Note only for a confirmed development installation.
+
+- b0d73c9: Restore Preview syntax highlighting with the full bundled highlight.js language library and aliases, paired light/dark colors, and escaped plain text for missing or unsupported languages. Remove Mermaid diagram rendering; existing Mermaid fences remain readable as ordinary code without changing saved Markdown. Source keeps Monaco and its existing editing behavior.
+
 ## 0.2.1
 
 ### Patch Changes
