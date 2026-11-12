@@ -1,40 +1,32 @@
 # SideNote for Orca
 
-Write Markdown notes for Orca projects and worktrees in the right sidebar. The panel automatically shows the note for the focused project or worktree.
+Keep a Markdown note beside each Orca project or worktree. SideNote follows the focused location and saves edits automatically.
 
 ![Source and Preview tabs of the same demo note, shown side by side](docs/images/sidenote.png)
 
-*The same demo note's Source and Preview tabs, captured in an isolated environment and shown side by side.*
+*Source and Preview of a synthetic demo note, shown side by side. SideNote does not have a native split view.*
 
-## Features
+## In this checkout
 
 - Keep separate notes for each host and folder path, including worktrees.
-- Write Markdown in Source, the editor with automatic saving, find and replace, line numbers, and per-note undo.
-- Use Preview to view formatted Markdown, toggle task checkboxes, and view locally rendered Mermaid diagrams and syntax-highlighted code. Preview does not load images.
-- Set a character limit and choose whether to show Source line numbers.
+- Write in Source with find and replace, line numbers, and per-note undo.
+- Read formatted Markdown in Preview, toggle tasks, and view highlighted code blocks.
+- Back up and restore notes with a JSON file.
 
-## Get started
+Preview does not render diagrams or load images. See [Usage](docs/USAGE.md) for editing and [Data](docs/DATA.md) for backup and restore.
 
-The current setup uses a local macOS development folder. It requires Orca and its CLI, plus Node.js 20 or later and npm.
+## Try a local checkout
 
-Load only a trusted checkout. The plugin's `trusted-worker` runs Node.js code with your account permissions. See [Installation and trust](docs/MAINTENANCE.md#installation-and-trust) for access details.
+The development setup uses macOS, Orca and its CLI, Node.js 20 or later, and npm. Load only a trusted checkout. Its `trusted-worker` runs code with your account permissions.
 
-1. Build the plugin with the [Development setup instructions](docs/DEVELOPMENT.md#prerequisites-and-setup).
-2. Load the folder with the [development loading instructions](docs/DEVELOPMENT.md#load-the-development-folder).
+1. [Build the checkout](docs/DEVELOPMENT.md#prerequisites-and-setup).
+2. [Load the development folder](docs/DEVELOPMENT.md#load-the-development-folder).
 3. Open **Note** in Orca's right sidebar.
 
-## Notes and storage
+Notes live in Orca's plugin storage, not project files or Git. They do not sync or back up automatically. [Back up important notes](docs/DATA.md#back-up-notes) to a separate file.
 
-- Orca stores notes in plugin-owned storage, not project Markdown files or Git.
-- Copy important notes to a separate file.
-- Notes default to an 8,000-character limit. You can change the limit in **Note Settings**.
-
-## Documentation
-
-- [Usage](docs/USAGE.md): edit notes, use Preview, change settings, delete notes, or understand note storage scope.
-
-See [Development](docs/DEVELOPMENT.md), [Maintenance](docs/MAINTENANCE.md), and [Contributing](CONTRIBUTING.md) for setup, data protection, and change workflows.
+For changes, see [Contributing](CONTRIBUTING.md). For operational help, see [Maintenance](docs/MAINTENANCE.md).
 
 ## License
 
-Project code is available under the [MIT License](LICENSE), copyright 2026 orca-sidenote contributors. Third-party files retain their own licenses. See the [third-party notices](docs/MAINTENANCE.md#third-party-licenses-and-redistribution-notices).
+Project code is available under the [MIT License](LICENSE). Third-party files retain their own licenses. See [third-party notices](docs/NOTICES.md).

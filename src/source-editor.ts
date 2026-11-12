@@ -21,7 +21,7 @@ monaco.languages.setLanguageConfiguration('markdown', conf)
 monaco.languages.setMonarchTokensProvider('markdown', language)
 
 export interface SourceEditor {
-  sync(key: string, text: string, ready: boolean, limit: NoteLimit, epoch: number): void
+  sync(key: string, text: string, ready: boolean, limit: NoteLimit, epoch: number, invalidations?: ReadonlyMap<string, number>): void
   setLineNumbers(visible: boolean): void
   toggleTask(key: string, text: string, marker: TaskMarker, epoch: number): boolean
   show(focus: boolean): void
@@ -71,6 +71,7 @@ export async function createSourceEditor(container: HTMLElement, changed: (key: 
   let epoch = 0
   let lineNumbers = true
   let revision = 0
+  const invalidated = new Map<string, number>()
   function theme() {
     const style = getComputedStyle(document.documentElement)
     const color = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
@@ -155,7 +156,18 @@ export async function createSourceEditor(container: HTMLElement, changed: (key: 
     editor.pushUndoStop()
   })
   return {
-    sync(nextKey: string, text: string, ready: boolean, nextLimit: NoteLimit, nextEpoch: number) {
+    sync(nextKey: string, text: string, ready: boolean, nextLimit: NoteLimit, nextEpoch: number, invalidations?: ReadonlyMap<string, number>) {
+      for (const [changedKey, version] of invalidations ?? []) {
+        if (invalidated.get(changedKey) === version) continue
+        invalidated.set(changedKey, version)
+        const entry = entries.get(changedKey)
+        if (entry) {
+          revision++
+          if (key === changedKey) { editor.setModel(null); key = '' }
+          entry.model.dispose()
+          entries.delete(changedKey)
+        }
+      }
       if (epoch !== nextEpoch) {
         revision++
         editor.setModel(null)
@@ -199,7 +211,6 @@ export async function createSourceEditor(container: HTMLElement, changed: (key: 
           // Finish the current Monaco edit transaction before touching its undo stack.
           queueMicrotask(() => {
             if (model.isDisposed()) return
-            // nextText belongs to this transaction, not a later queued edit.
             const stale = !enabled || key !== nextKey || editRevision !== revision
             if (stale || !allowsNoteChange(acceptedText, nextText, limit)) {
               restoring = true
@@ -260,63 +271,3 @@ export async function createSourceEditor(container: HTMLElement, changed: (key: 
   }
 }
 
-export function renderShortcutHelp(shortcutsList: HTMLElement): void {
-  const shortcutGroups = [
-    ['Editing', [
-      ['Select all', '⌘A'],
-      ['Cut / Copy / Paste', '⌘X / ⌘C / ⌘V'],
-      ['Undo / Redo', '⌘Z / ⇧⌘Z']
-    ]],
-    ['Find', [
-      ['Find', '⌘F'],
-      ['Replace', '⌘⌥F'],
-      ['Next / previous match', '⌘G / ⇧⌘G']
-    ]],
-    ['Line Editing', [
-      ['Move line up / down', '⌥↑ / ⌥↓'],
-      ['Copy line up / down', '⇧⌥↑ / ⇧⌥↓'],
-      ['Delete line', '⇧⌘K'],
-      ['Insert line below / above', '⌘Enter / ⇧⌘Enter'],
-      ['Indent / outdent', 'Tab / ⇧Tab', '⌘] / ⌘[']
-    ]],
-    ['Selection & Cursors', [
-      ['Add cursor above / below', '⌘⌥↑ / ⌘⌥↓'],
-      ['Add cursor at click', '⌥Click'],
-      ['Add next occurrence', '⌘D'],
-      ['Select all occurrences', '⇧⌘L'],
-      ['Add cursors at selected line ends', '⇧⌥I'],
-      ['Remove extra cursors (closes Find first)', 'Esc']
-    ]],
-    ['Navigation', [
-      ['Line start / end', '⌘← / ⌘→'],
-      ['Document start / end', '⌘↑ / ⌘↓'],
-      ['Previous / next word', '⌥← / ⌥→'],
-      ['Extend selection while navigating', 'Hold ⇧']
-    ]]
-  ] as const
-
-  for (const [title, shortcuts] of shortcutGroups) {
-    const group = document.createElement('section')
-    group.className = 'shortcut-group'
-    const heading = document.createElement('h3')
-    heading.textContent = title
-    const list = document.createElement('dl')
-    for (const [action, ...keys] of shortcuts) {
-      const row = document.createElement('div')
-      row.className = 'shortcut-row'
-      const label = document.createElement('dt')
-      label.textContent = action
-      const value = document.createElement('dd')
-      for (const [index, key] of keys.entries()) {
-        if (index) value.append(document.createElement('br'))
-        const keycap = document.createElement('kbd')
-        keycap.textContent = key
-        value.append(keycap)
-      }
-      row.append(label, value)
-      list.append(row)
-    }
-    group.append(heading, list)
-    shortcutsList.append(group)
-  }
-}

@@ -9,7 +9,7 @@
 </head>
 <body>
   <header class="note-heading">
-    <div class="note-title"><h1>Note</h1><div id="location" title="">Switching…</div></div>
+    <div class="note-title"><h1>Note <span id="dev-badge" hidden>DEV</span></h1><div id="location" title="">Switching…</div></div>
     <button id="shortcuts-open" class="icon-button" type="button" title="Keyboard Shortcuts" aria-label="Keyboard Shortcuts" aria-haspopup="dialog" aria-controls="shortcuts-help">
       <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true" focusable="false">
         <rect x="1.5" y="4.5" width="17" height="11" rx="2"/>
@@ -69,6 +69,11 @@
       </section>
       <p id="settings-error" role="alert" hidden></p>
     </form>
+    <section class="data-section" aria-labelledby="data-title">
+      <h3 id="data-title">Data</h3>
+      <p>Back up or restore notes in this plugin store. Settings and undo history are not transferred.</p>
+      <button id="transfer-open" type="button" aria-haspopup="dialog" aria-controls="note-transfer">Back up or restore notes…</button>
+    </section>
     <section class="delete-section" aria-label="Delete notes">
       <p>Remove notes from every project and worktree in this plugin store. Settings are kept.</p>
       <button id="delete-notes-open" type="button" aria-haspopup="dialog" aria-controls="delete-notes">Delete all notes…</button>
@@ -83,6 +88,29 @@
       <button id="delete-notes-cancel" type="button" autofocus>Cancel</button>
       <button id="delete-notes-confirm" type="button" disabled>Delete all notes</button>
     </div>
+  </dialog>
+  <dialog id="note-transfer" aria-labelledby="transfer-title">
+    <header class="help-heading"><h2 id="transfer-title">Back up or restore notes</h2><button id="transfer-close" type="button">Close</button></header>
+    <p>Notes only, in this plugin store. Settings and undo history are not transferred. Host and path identities stay exact; paths are never file destinations.</p>
+    <p>First save or copy unsaved content in all other Note panels using this store, then close them. Other panels cannot be detected or locked. This is not a cross-panel transaction.</p>
+    <label><input id="transfer-alone" type="checkbox">I have safely saved or copied other panels’ unsaved content and closed those panels.</label>
+    <button id="transfer-start" type="button" disabled>Start transfer</button>
+    <section><h3>Backup</h3><p>Includes all stored notes plus separate recovery drafts from this panel, including failed saves and empty clears. Nothing is shortened.</p>
+      <button id="transfer-capture" type="button" disabled>Prepare backup</button>
+      <button id="transfer-save" type="button" disabled>Save backup file</button>
+    </section>
+    <section><h3>Restore</h3><p>Choose a UTF-8 JSON backup (up to 16 MiB). Notes absent from the backup are kept. Choose candidates, then preview. Oversized notes remain intact; your current editing limit is unchanged.</p>
+      <label>Backup file <input id="transfer-file" type="file" accept=".json,application/json" disabled></label>
+      <div id="transfer-candidates"></div>
+      <button id="transfer-preview" type="button" disabled>Preview selected restore</button>
+      <p>Replacing text requires a saved protection file containing affected stored originals and all local recovery drafts. Changed notes get new undo history; unchanged notes keep it.</p>
+      <button id="transfer-protect" type="button" disabled>Save protection file</button>
+      <label><input id="transfer-confirm" type="checkbox">Replace the selected different notes and affected local drafts after saving protection.</label>
+      <button id="transfer-commit" type="button" disabled>Restore selected notes</button>
+      <button id="transfer-stop" type="button" disabled>Stop after in-flight note</button>
+      <p>Restore stops on the first failed request. Its outcome may be unknown; earlier writes are not rolled back. Preview again before retrying.</p>
+    </section>
+    <pre id="transfer-summary" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
   </dialog>
   <script type="module" src="../dist/panel.js"></script>
 </body>

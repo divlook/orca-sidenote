@@ -5,6 +5,8 @@ body { display: flex; flex-direction: column; gap: 10px; padding: 12px;
   font: 13px/1.5 system-ui, sans-serif; }
 [hidden] { display: none !important; }
 h1 { margin: 0; font-size: 14px; font-weight: 600; }
+#dev-badge { display: inline-block; padding: 0 4px; border: 1px solid var(--orca-border);
+  border-radius: 4px; color: var(--orca-muted-foreground); font-size: 10px; vertical-align: 1px; }
 [role=tablist] { display: flex; gap: 14px; flex-shrink: 0; border-bottom: 1px solid var(--orca-border); }
 button { font: inherit; cursor: pointer; color: var(--orca-muted-foreground); background: none; border: 0; }
 [role=tab] { padding: 5px 2px 7px; border-bottom: 2px solid transparent; }
@@ -52,9 +54,6 @@ article .markdown-task-checkbox { margin: 0; vertical-align: middle; }
 article table { border-collapse: collapse; }
 article td, article th { padding: 4px 8px; border: 1px solid var(--orca-border); }
 article blockquote { margin-left: 0; padding-left: 12px; border-left: 3px solid var(--orca-border); color: var(--orca-muted-foreground); }
-.mermaid-block { margin: 12px 0; }
-.mermaid-diagram { width: 100%; overflow: auto; }
-.mermaid-block [role=status] { color: var(--orca-muted-foreground); white-space: pre-wrap; }
 #problem { color: var(--orca-destructive); white-space: pre-wrap; }
 footer { display: flex; justify-content: space-between; flex-shrink: 0; gap: 8px;
   min-height: 18px; font-size: 11px; color: var(--orca-muted-foreground); }
@@ -101,13 +100,24 @@ footer { display: flex; justify-content: space-between; flex-shrink: 0; gap: 8px
 #settings-error { color: var(--orca-destructive); }
 .settings-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 button:disabled { cursor: default; opacity: .5; }
-#delete-notes { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
+#delete-notes, #note-transfer { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
   margin: auto; padding: 12px; overflow: auto; border: 1px solid var(--orca-border); border-radius: 8px;
   color: var(--orca-foreground); background: var(--orca-background); font: inherit; }
-#delete-notes::backdrop { background: rgb(0 0 0 / 45%); }
+#delete-notes::backdrop, #note-transfer::backdrop { background: rgb(0 0 0 / 45%); }
 #delete-notes h2 { margin: 0; font-size: 14px; }
 .delete-section { margin-top: 20px; border-top: 1px solid var(--orca-border); }
 #delete-notes-open { color: var(--orca-foreground); text-decoration: underline; }
 #delete-notes-confirm { padding: 5px 10px; border-radius: 4px; color: var(--orca-destructive-foreground); background: var(--orca-destructive); }
 #delete-notes-error { color: var(--orca-destructive); }
 #delete-notes .settings-actions { gap: 12px; }
+.data-section { margin-top: 20px; border-top: 1px solid var(--orca-border); }
+.data-section h3 { margin: 14px 0 0; font-size: 13px; }
+#transfer-open { padding: 6px 8px; border: 1px solid var(--orca-border); border-radius: 4px; }
+#note-transfer section { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--orca-border); }
+#note-transfer label { display: block; margin: 8px 0; }
+#note-transfer button { margin: 4px 4px 4px 0; padding: 6px 8px; border: 1px solid var(--orca-border); border-radius: 4px; }
+#transfer-candidates { max-height: 240px; overflow: auto; overscroll-behavior: contain; }
+#transfer-candidates fieldset { min-width: 0; margin: 8px 0; border: 1px solid var(--orca-border); }
+#transfer-candidates legend { max-width: 100%; overflow-wrap: anywhere; }
+#transfer-candidates select, #transfer-file { max-width: 100%; font: inherit; }
+#transfer-candidates select { width: 100%; color: var(--orca-foreground); background: var(--orca-background); }

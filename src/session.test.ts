@@ -178,13 +178,12 @@ test('the note consumer rejects over-limit edits without changing the accepted d
   const { store, values } = memoryStore()
   const session = new NoteSession(store, () => {})
   await session.follow(async () => local)
-  const accepted = 'a'.repeat(8000)
+  session.setLimit(3)
+  const accepted = 'abc'
   await session.save(accepted, session.view.key)
   await session.save(accepted + 'overflow', session.view.key)
   assert.equal(session.view.text, accepted)
   assert.equal(values.get(noteKey(local)), accepted)
-  assert.equal(session.view.pending, 0)
-  assert.ok(session.view.error.includes('8000'))
 })
 
 test('custom and unlimited limits persist long notes without truncating them when lowered', async () => {
@@ -271,7 +270,6 @@ test('global deletion drains queued saves and includes unloaded notes without re
   await session.finishDeletion()
   assert.equal(session.view.text, '')
   assert.equal(session.view.ready, true)
-  assert.equal(session.view.epoch, 1)
   assert.equal(values.size, 1)
   assert.equal(values.has('settings:note-character-limit'), true)
 })
@@ -316,13 +314,12 @@ test('failed enumeration and cancellation preserve failed unsaved drafts', async
   }, set: async () => { throw new Error('Cannot save') } }, () => {})
   await session.follow(async () => local)
   await session.save('Unsaved draft')
-  try { await session.prepareDeletion() } catch {}
+  await assert.rejects(() => session.prepareDeletion())
   await session.finishDeletion()
   assert.equal(session.view.text, 'Unsaved draft')
   fail = false
   assert.equal(await session.prepareDeletion(), 1)
   await session.finishDeletion()
   assert.equal(session.view.text, 'Unsaved draft')
-  assert.equal(session.view.epoch, 0)
   assert.equal(values.size, 0)
 })

@@ -1,10 +1,13 @@
 import type {} from 'orca/frame'
 import { NoteSession } from './session'
-import { createSourceEditor, renderShortcutHelp, type SourceEditor } from './source-editor'
+import { createSourceEditor, type SourceEditor } from './source-editor'
 import { createNoteSettings } from './note-settings-view'
 import { bindDialog } from './dialog'
 import { createPreview } from './preview'
 import { bindNoteDeletion } from './note-deletion-view'
+import { bindNoteTransfer } from './note-transfer-view'
+import { NotesTransfer } from './notes-transfer'
+import { renderShortcutHelp } from './shortcut-help'
 
 const editor = document.querySelector<HTMLElement>('#editor')!
 const preview = document.querySelector<HTMLElement>('#preview')!
@@ -19,6 +22,9 @@ const shortcutsOpen = document.querySelector<HTMLButtonElement>('#shortcuts-open
 const shortcutsHelp = document.querySelector<HTMLDialogElement>('#shortcuts-help')!
 const shortcutsClose = document.querySelector<HTMLButtonElement>('#shortcuts-close')!
 renderShortcutHelp(document.querySelector<HTMLElement>('#shortcuts-list')!)
+void orca.plugin.request('notes.devStatus').then(isDev => {
+  if (isDev === true) document.querySelector<HTMLElement>('#dev-badge')!.hidden = false
+}).catch(() => {})
 bindDialog(shortcutsHelp, shortcutsOpen, shortcutsClose)
 
 let previewing = false
@@ -32,6 +38,7 @@ const settings = createNoteSettings(orca.storage, () => {
   session.setLimit(settings.view.limit)
 })
 bindNoteDeletion(session)
+bindNoteTransfer(new NotesTransfer(session), () => settings.view.ready ? settings.view.limit : undefined)
 const markdown = createPreview(preview, async href => { await orca.shell?.openExternal(href) }, error => {
   externalError = error instanceof Error ? error.message : String(error)
   render()
@@ -45,7 +52,7 @@ function render(): void {
   const view = session.view
   const { limit, ready: settingsReady, problem: settingsProblem } = settings.view
   const ready = view.ready && settingsReady && !editorError
-  source?.sync(view.key, view.text, ready, limit, view.epoch)
+  source?.sync(view.key, view.text, ready, limit, view.epoch, view.invalidations)
   source?.setLineNumbers(settings.view.lineNumbers)
   notePanel.setAttribute('aria-busy', String(view.loading || !settingsReady))
   const target = view.target

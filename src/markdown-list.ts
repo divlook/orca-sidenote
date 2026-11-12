@@ -1,14 +1,9 @@
 import { marked, type Token } from 'marked'
+import { countSourceLineBreaks } from './source-text'
 
 // Marked removes indentation from item bodies, but preserves their line breaks.
-// Follow block tokens, not inline text, to exclude literal code and HTML.
 export function markdownListItemLines(text: string): Set<number> {
   const lines = new Set<number>()
-  const newlines = (raw: string) => {
-    let count = 0
-    for (let index = 0; index < raw.length; index++) if (raw.charCodeAt(index) === 10) count++
-    return count
-  }
   function collect(tokens: Token[], start: number): void {
     for (const token of tokens) {
       if (token.type === 'list') {
@@ -16,10 +11,10 @@ export function markdownListItemLines(text: string): Set<number> {
         for (const item of token.items) {
           lines.add(itemLine)
           collect(item.tokens, itemLine)
-          itemLine += newlines(item.raw)
+          itemLine += countSourceLineBreaks(item.raw)
         }
       }
-      start += newlines(token.raw)
+      start += countSourceLineBreaks(token.raw)
     }
   }
   // Empty in-progress items can otherwise parse as prose or Setext headings.

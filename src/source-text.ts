@@ -11,10 +11,18 @@ export function sourceLineStarts(text: string): number[] {
 
 export function canonicalSource(text: string): string { return text.replace(/\r\n|\r/g, '\n') }
 
+export function countSourceLineBreaks(text: string): number {
+  let count = 0
+  for (let index = 0; index < text.length; index++) {
+    if (text[index] === '\r') { count++; if (text[index + 1] === '\n') index++ }
+    else if (text[index] === '\n') count++
+  }
+  return count
+}
+
 type SourceChange = { range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }; text: string }
 
 // Monaco's changes are ordered from the end of the document to the beginning.
-// Keep untouched source bytes, including mixed line endings, outside each range.
 export function applySourceChanges(text: string, changes: readonly SourceChange[]): string {
   const starts = sourceLineStarts(text)
   let result = text

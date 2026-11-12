@@ -1,15 +1,7 @@
 import { marked, Renderer, type Tokens } from 'marked'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
-import { isMermaidFence } from './diagram-policy'
-import type * as DiagramModule from './diagram'
 import { mapMarkdownTasks, type TaskMarker } from './markdown-tasks'
-
-let diagrams: Promise<typeof DiagramModule> | undefined
-function loadDiagrams(): Promise<typeof DiagramModule> {
-  // Built separately with a scoped document binding for Mermaid's global selectors.
-  return diagrams ??= import(new URL('./diagram.js', import.meta.url).href) as Promise<typeof DiagramModule>
-}
 
 export function createPreview(element: HTMLElement, openExternal: (href: string) => Promise<unknown>, failed: (error: unknown) => void,
   toggle: (key: string, text: string, marker: TaskMarker, epoch: number) => boolean) {
@@ -42,8 +34,7 @@ export function createPreview(element: HTMLElement, openExternal: (href: string)
       trustedInputs = []
       scheme = theme
       identity = key
-      const blocks: { id: string; text: string }[] = []
-      const nonce = `mermaid-${crypto.randomUUID()}-`
+      const nonce = `preview-${crypto.randomUUID()}-`
       const renderer = new Renderer()
       const parsed = mapMarkdownTasks(text, marked.lexer(text))
       const tasks: { id: string; marker: TaskMarker; checked: boolean }[] = []
@@ -68,11 +59,6 @@ export function createPreview(element: HTMLElement, openExternal: (href: string)
       }
       const ordinaryCode = renderer.code.bind(renderer)
       renderer.code = token => {
-        if (isMermaidFence(token)) {
-          const id = `${nonce}${blocks.length}`
-          blocks.push({ id, text: token.text })
-          return `<div id="${id}"></div>`
-        }
         const language = token.lang?.match(/^\S+/)?.[0]
         if (!language || !hljs.getLanguage(language)) return ordinaryCode(token)
         try {
@@ -108,41 +94,6 @@ export function createPreview(element: HTMLElement, openExternal: (href: string)
         })
         placeholder.replaceWith(input)
         if (focused === input.dataset.taskOffset) input.focus({ preventScroll: true })
-      }
-      for (const block of blocks) {
-        const container = element.querySelector<HTMLElement>(`#${block.id}`)
-        if (!container) continue
-        container.className = 'mermaid-block'
-        const status = document.createElement('p')
-        status.setAttribute('role', 'status')
-        status.textContent = 'Rendering Mermaid diagram…'
-        const source = document.createElement('pre')
-        const code = document.createElement('code')
-        code.textContent = block.text
-        source.append(code)
-        const host = document.createElement('div')
-        host.className = 'mermaid-diagram'
-        // Keep layout available for SVG measurements without exposing temporary DOM.
-        host.style.visibility = 'hidden'
-        const shadow = host.attachShadow({ mode: 'open' })
-        const style = document.createElement('style')
-        style.textContent = ':host{display:block;overflow:auto}svg{display:block;max-width:100%;height:auto}'
-        const output = document.createElement('div')
-        shadow.append(style, output)
-        container.append(status, source, host)
-        const current = () => revision === generation && container.isConnected
-        void loadDiagrams().then(async module => {
-          if (!current()) return
-          await module.renderDiagram(block.text, theme === 'dark', output, current)
-          if (!current()) return
-          host.style.visibility = 'visible'
-          status.hidden = true
-          source.hidden = true
-        }).catch(error => {
-          if (!current()) return
-          host.remove()
-          status.textContent = `Mermaid diagram unavailable: ${error instanceof Error ? error.message : String(error)}`
-        })
       }
       rendered = text
     },

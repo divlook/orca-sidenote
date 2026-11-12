@@ -1,18 +1,21 @@
 # Agent guidance
 
-This is a local macOS Orca development plugin. User notes live in Orca plugin storage, not project files. Use test notes for development and verification; preserve existing user notes and settings.
-
-Write repository documentation in English.
+Write repository documentation in English. Preserve user notes and settings. Use isolated stores for destructive tests.
 
 ## Invariants
 
-- Storage keys are `note:v1:` + `JSON.stringify([hostId, path])`. Preserve host/path isolation; plan data migration before changing this format.
-- `notes.focused` and the installed CLI's absolute path are concrete integration contracts. Keep editing blocked for ambiguous or truncated focus responses.
-- Preserve focus generation and editor revision/key guards, ordered writes, failed drafts and retry, and per-note Monaco undo/view state.
-- Lowering limits must not truncate notes. Preserve worker preflight, undo-based rejected-edit restoration, and sanitized preview.
+- Preserve `note:v1:` + `JSON.stringify([hostId, path])` and host/path isolation. Plan migration before changing the format.
+- Keep `notes.focused` and the installed CLI path as integration contracts. Block editing for ambiguous or truncated focus responses.
+- Preserve focus generation and editor revision/key guards, ordered writes, failed drafts, retry, and per-note undo and view state.
+- Keep worker preflight, non-truncating limits, rejected-edit restoration, and sanitized Preview.
 
-## Read when needed
+## Read by task
 
-- Setup, architecture, builds, or behavior checks: [Development](docs/DEVELOPMENT.md).
-- Storage incidents, upgrades, distribution, or third-party licenses: [Maintenance](docs/MAINTENANCE.md).
-- Change submission, verification scope, or PR preparation: [Contributing](CONTRIBUTING.md).
+- Setup, build, load, or approval: [Development](docs/DEVELOPMENT.md).
+- Tests, manual checks, or verification scope: [Verification](docs/VERIFICATION.md).
+- Runtime ownership, storage formats, or editor invariants: [Architecture](docs/ARCHITECTURE.md).
+- Backup, restore, deletion, or data recovery: [Data](docs/DATA.md).
+- Unload, disable, upgrade, or troubleshoot: [Maintenance](docs/MAINTENANCE.md).
+- Version, publish a Git distribution, or recover a release: [Release](docs/RELEASE.md).
+- Dependency licenses or redistribution: [Notices](docs/NOTICES.md).
+- Prepare or submit a change: [Contributing](CONTRIBUTING.md).

@@ -36,11 +36,6 @@ const result = await build({
   target: 'es2022', assetNames: 'assets/[name]-[hash]', plugins: [monacoFont],
   external: ['orca', 'orca/*'], legalComments: 'linked', metafile: true
 })
-const diagramResult = await build({
-  entryPoints: ['src/diagram.ts'], outfile: 'dist/diagram.js',
-  bundle: true, format: 'esm', minify: true, target: 'es2022',
-  inject: ['src/diagram-document.ts'], legalComments: 'linked', metafile: true
-})
 await copyFile('node_modules/monaco-editor/LICENSE', 'dist/monaco-LICENSE.txt')
 await copyFile('node_modules/monaco-editor/ThirdPartyNotices.txt', 'dist/monaco-ThirdPartyNotices.txt')
 
@@ -58,10 +53,8 @@ for (const [resolver, dependency, license, destination] of [
   await copyFile(source, `dist/${destination}`)
 }
 
-// Include full notices only for packages that contributed code to these bundles.
-// Metafile inputs include Mermaid's locally bundled diagram implementations.
 const runtimePackages = new Map()
-for (const input of [...Object.keys(result.metafile.inputs), ...Object.keys(diagramResult.metafile.inputs)]) {
+for (const input of Object.keys(result.metafile.inputs)) {
   if (!input.includes('node_modules/')) continue
   let directory = dirname(resolve(input))
   while (directory.includes('node_modules')) {

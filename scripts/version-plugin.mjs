@@ -12,7 +12,6 @@ if (pkg.private !== true || manifest.version !== pkg.version ||
   throw new Error('Expected a private package with matching package, manifest, and lockfile versions')
 }
 
-// Only these release files can change. Restore consumed entries too if sync fails.
 const entries = (await readdir('.changeset')).filter(name => name.endsWith('.md'))
 const paths = ['package.json', 'package-lock.json', 'orca-plugin.json', 'CHANGELOG.md',
   ...entries.map(name => `.changeset/${name}`)]
@@ -34,7 +33,7 @@ try {
   if (result.status !== 0) throw new Error(`Changesets version failed (${result.signal ?? result.status})`)
   const { version } = await readJson('package.json')
   if (version !== pkg.version) {
-    // No dependency specs change in this single-package release: update only root metadata.
+    // No dependency specs change in this single-package release.
     const manifestText = before.get('orca-plugin.json').toString()
     await writeFile('orca-plugin.json', manifestText.replace(
       /("version"\s*:\s*")[^"]+(")/, (_, prefix, suffix) => `${prefix}${version}${suffix}`

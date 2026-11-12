@@ -2,8 +2,6 @@ import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 
-// Only a merged, same-repository Changesets PR authorizes a release. A normal
-// main push, an unmerged PR, or an unrelated branch must never bootstrap a tag.
 export async function releasePlugin({ event, repository, api, cwd = process.cwd() }) {
   const pr = event.pull_request
   if (!pr?.merged || pr.base?.ref !== 'main' ||
@@ -37,7 +35,6 @@ export async function releasePlugin({ event, repository, api, cwd = process.cwd(
   const tagPath = `git/ref/tags/${tag}`
   const ref = await api('GET', tagPath)
   if (ref) {
-    // Accept an existing annotated tag only when it peels to this exact commit.
     let object = ref.object
     while (object.type === 'tag') object = (await api('GET', `git/tags/${object.sha}`)).object
     if (object.type !== 'commit' || object.sha !== sha) throw new Error(`${tag} points to another commit`)
@@ -54,7 +51,6 @@ export async function releasePlugin({ event, repository, api, cwd = process.cwd(
   return { tag, sha, created: true }
 }
 
-// GET 404 means an absent tag/release; every other HTTP failure is fatal.
 export function githubApi({ repository, token, fetch = globalThis.fetch }) {
   return async (method, path, body) => {
     const response = await fetch(`https://api.github.com/repos/${repository}/${path}`, {
