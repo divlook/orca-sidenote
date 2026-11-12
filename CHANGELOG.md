@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.3.1
+
+### Patch Changes
+
+- 4f1d6f1: Update the HTML sanitizers used by Preview and the Source editor to address published security vulnerabilities.
+
 ## 0.3.0
 
 ### Minor Changes
