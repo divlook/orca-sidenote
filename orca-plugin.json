@@ -4,6 +4,10 @@
   "name": "SideNote for Orca",
   "version": "0.4.1",
   "description": "A sidebar panel that automatically saves Markdown notes for each project and worktree",
+  "cover": {
+    "path": "docs/images/sidenote.png",
+    "alt": "SideNote Preview showing a sample project checklist with Markdown headings, tasks, and shell commands"
+  },
   "screenshots": [
     {
       "path": "docs/images/sidenote.png",
