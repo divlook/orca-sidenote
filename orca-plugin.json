@@ -5,19 +5,24 @@
   "version": "0.4.2",
   "description": "A sidebar panel that automatically saves Markdown notes for each project and worktree",
   "cover": {
-    "path": "docs/images/sidenote.png",
-    "alt": "SideNote Preview showing a sample project checklist with Markdown headings, tasks, and shell commands"
+    "path": "docs/images/cover.png",
+    "alt": "SideNote displaying two reading-mode notes and a minimized note"
   },
   "screenshots": [
     {
-      "path": "docs/images/sidenote.png",
-      "alt": "SideNote Preview showing a sample project checklist with Markdown headings, tasks, and shell commands",
-      "caption": "Preview a sample project note with tasks and code."
+      "path": "docs/images/sidenote-overview.png",
+      "alt": "A checklist and next steps in reading mode with a minimized implementation note between them",
+      "caption": "Read a checklist and next steps with another note minimized."
     },
     {
       "path": "docs/images/sidenote-source.png",
-      "alt": "SideNote Source editor showing the same sample Markdown checklist with syntax highlighting and line numbers",
-      "caption": "Edit the same note in the Markdown Source editor."
+      "alt": "A Markdown note open for editing below a reading-mode checklist and above a minimized note",
+      "caption": "Edit Markdown alongside a reading-mode note."
+    },
+    {
+      "path": "docs/images/sidenote-organize.png",
+      "alt": "Two minimized notes above an expanded note with next steps",
+      "caption": "Minimize notes and keep the next steps open."
     }
   ],
   "engines": { "orca": ">=1.4.248" },

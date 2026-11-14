@@ -8,9 +8,9 @@ Use [Development](docs/DEVELOPMENT.md) to set up a checkout. Use [Architecture](
 2. Explain compatibility and migration before changing storage keys, identities, limits, permissions, or focus handling.
 3. Update related code, tests, and guidance. Preserve user files, notes, and settings.
 4. Regenerate built assets instead of editing them directly.
-5. For a user-visible change, run `npm run changeset`. Select `orca-sidenote` and the appropriate semantic-version bump. Write a short release note. Commit the generated `.changeset/*.md` with the change. Documentation-only changes need no release entry.
+5. Before marking implementation complete, ensure every user-visible change is covered by a new or updated Changeset, even when no commit or release is requested. Run `npm run changeset`, select `orca-sidenote` and the appropriate semantic-version bump, and write a short release note. When committing the change, include its `.changeset/*.md` entry. Documentation-only changes need no release entry.
 
-[Follow the verification guide](docs/VERIFICATION.md) and record your results. Review the generated version PR before merging it. See [Release](docs/RELEASE.md) for its contents and prerequisites.
+Run `npm test` for the portable model, editor, and release tests. [Follow the verification guide](docs/VERIFICATION.md) for other checks and record your results. Review the generated version PR before merging it. See [Release](docs/RELEASE.md) for its contents and prerequisites; the release/version workflow generates `CHANGELOG.md`.
 
 ## Submit a change
 

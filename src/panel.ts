@@ -1,129 +1,64 @@
 import type {} from 'orca/frame'
-import { NoteSession } from './session'
-import { createSourceEditor, type SourceEditor } from './source-editor'
-import { createNoteSettings } from './note-settings-view'
+import { NoteSession } from './notes/session'
+import { createNoteCards } from './notes/note-cards'
+import { createNoteSettings } from './settings/note-settings-view'
 import { bindDialog } from './dialog'
-import { createPreview } from './preview'
-import { bindNoteDeletion } from './note-deletion-view'
-import { bindNoteTransfer } from './note-transfer-view'
-import { NotesTransfer } from './notes-transfer'
-import { renderShortcutHelp } from './shortcut-help'
+import { bindNoteDeletion } from './notes/note-deletion-view'
+import { bindNoteTransfer } from './transfer/note-transfer-view'
+import { NotesTransfer } from './transfer/notes-transfer'
+import { renderShortcutHelp } from './editor/shortcut-help'
 
-const editor = document.querySelector<HTMLElement>('#editor')!
-const preview = document.querySelector<HTMLElement>('#preview')!
-const problem = document.querySelector<HTMLElement>('#problem')!
-const status = document.querySelector<HTMLElement>('#status')!
-const retry = document.querySelector<HTMLButtonElement>('#retry')!
-const editTab = document.querySelector<HTMLButtonElement>('#edit-tab')!
-const previewTab = document.querySelector<HTMLButtonElement>('#preview-tab')!
-const notePanel = document.querySelector<HTMLElement>('#note-panel')!
-const locationLabel = document.querySelector<HTMLElement>('#location')!
-const shortcutsOpen = document.querySelector<HTMLButtonElement>('#shortcuts-open')!
-const shortcutsHelp = document.querySelector<HTMLDialogElement>('#shortcuts-help')!
-const shortcutsClose = document.querySelector<HTMLButtonElement>('#shortcuts-close')!
-renderShortcutHelp(document.querySelector<HTMLElement>('#shortcuts-list')!)
-void orca.plugin.request('notes.devStatus').then(isDev => {
-  if (isDev === true) document.querySelector<HTMLElement>('#dev-badge')!.hidden = false
-}).catch(() => {})
-bindDialog(shortcutsHelp, shortcutsOpen, shortcutsClose)
-
-let previewing = false
-let source: SourceEditor | undefined
-let editorError = ''
-let disposed = false
-let externalError = ''
-let limitMessage = ''
+const element = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!
+const panel = element<HTMLElement>('note-panel')
+const problem = element<HTMLElement>('problem'), retry = element<HTMLButtonElement>('retry')
+const locationLabel = element<HTMLElement>('location')
+const addButtons = [element<HTMLButtonElement>('add-note-top'), element<HTMLButtonElement>('add-note-bottom')]
+let disposed = false, externalError = ''
 const session = new NoteSession(orca.storage, render)
-const settings = createNoteSettings(orca.storage, () => {
-  limitMessage = ''
-  session.setLimit(settings.view.limit)
+const settings = createNoteSettings(orca.storage, render)
+const cards = createNoteCards({
+  list: element('note-list'), panel, session, preferences: () => settings.view, changed: render, report,
+  deleteDialog: element<HTMLDialogElement>('delete-note'),
+  openExternal: async href => { await orca.shell?.openExternal(href) },
+  focusAdd: () => addButtons[0].focus({ preventScroll: true })
 })
 bindNoteDeletion(session)
-bindNoteTransfer(new NotesTransfer(session), () => settings.view.ready ? settings.view.limit : undefined)
-const markdown = createPreview(preview, async href => { await orca.shell?.openExternal(href) }, error => {
+bindNoteTransfer(new NotesTransfer(session))
+renderShortcutHelp(element('shortcuts-list'))
+bindDialog(element<HTMLDialogElement>('shortcuts-help'), element('shortcuts-open'), element('shortcuts-close'))
+void orca.plugin.request('notes.devStatus').then(value => {
+  if (value === true) element('dev-badge').hidden = false
+}).catch(() => {})
+
+function report(error: unknown) {
   externalError = error instanceof Error ? error.message : String(error)
   render()
-}, (key, text, marker, epoch) => {
-  const view = session.view
-  return previewing && view.ready && settings.view.ready && !editorError && view.key === key
-    && view.text === text && view.epoch === epoch && !!source?.toggleTask(key, text, marker, epoch)
-})
-
+}
 function render(): void {
-  const view = session.view
-  const { limit, ready: settingsReady, problem: settingsProblem } = settings.view
-  const ready = view.ready && settingsReady && !editorError
-  source?.sync(view.key, view.text, ready, limit, view.epoch, view.invalidations)
-  source?.setLineNumbers(settings.view.lineNumbers)
-  notePanel.setAttribute('aria-busy', String(view.loading || !settingsReady))
-  const target = view.target
-  const basename = target?.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || target?.path
+  if (disposed) return
+  const view = session.view, preferences = settings.view
+  cards.render(view, preferences)
+  const target = view.target, basename = target?.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || target?.path
   locationLabel.textContent = view.loading ? 'Switching…' : view.problem ? 'Location unavailable'
     : target ? `${target.project ?? basename} · ${target.worktree ?? basename}${target.hostId && target.hostId !== 'local' ? ` · ${target.hostId}` : ''}` : 'No active worktree'
   locationLabel.title = !view.loading && target ? `${target.hostId ?? 'local'}: ${target.path}` : ''
-  problem.textContent = editorError || settingsProblem || view.problem || view.error || externalError || limitMessage
+  problem.textContent = preferences.problem || view.problem || view.error || cards.problem || externalError
   problem.hidden = !problem.textContent
-  retry.hidden = !view.error
-  retry.disabled = view.pending > 0 || !ready
-  const count = limit === null ? `${view.text.length} characters` : `${view.text.length}/${limit} characters`
-  status.textContent = view.loading ? 'Switching…' : editorError ? 'Editor unavailable' : !settingsReady ? (settingsProblem ? 'Settings unavailable' : 'Loading settings…')
-    : !source ? 'Loading editor…' : !view.ready ? (view.problem ? '' : 'Select a worktree')
-    : `${view.pending ? 'Saving…' : view.dirty ? 'Not saved' : 'Saved'} · ${count}`
-  if (previewing) markdown.render(view.loading || !view.ready ? '' : view.text, view.key, ready && !!source, view.epoch)
+  const writable = view.ready && preferences.ready
+  retry.hidden = !view.error; retry.disabled = !writable || view.pending > 0
+  for (const add of addButtons) add.disabled = !writable
+  panel.setAttribute('aria-busy', String(view.loading || !preferences.ready))
 }
-
-function showPreview(value: boolean): void {
-  previewing = value
-  editor.hidden = value
-  preview.hidden = !value
-  editTab.setAttribute('aria-selected', String(!value))
-  previewTab.setAttribute('aria-selected', String(value))
-  editTab.tabIndex = value ? -1 : 0
-  previewTab.tabIndex = value ? 0 : -1
-  notePanel.setAttribute('aria-labelledby', value ? 'preview-tab' : 'edit-tab')
-  if (value) render()
-  else { markdown.suspend(); source?.show(true) }
-}
-
-function followFocus(): Promise<void> {
+for (const add of addButtons) add.addEventListener('click', () => { void cards.addNote().catch(report) })
+retry.addEventListener('click', () => { void session.retry().catch(report) })
+function followFocus() {
   externalError = ''
+  cards.scopeChanging()
   return session.follow(() => orca.plugin.request('notes.focused'))
 }
-function editorFailed(error: unknown): void {
-  editorError = error instanceof Error ? error.message : String(error)
-  render()
-}
-
-retry.addEventListener('click', () => { void session.save(session.view.text, session.view.key) })
-editTab.addEventListener('click', () => showPreview(false))
-previewTab.addEventListener('click', () => showPreview(true))
-for (const tab of [editTab, previewTab]) {
-  tab.addEventListener('keydown', event => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-    event.preventDefault()
-    const next = event.key === 'Home' ? false : event.key === 'End' ? true : !previewing
-    showPreview(next)
-    ;(next ? previewTab : editTab).focus()
-  })
-}
 const subscription = orca.on('workspace.changed', followFocus)
-const themeSubscription = orca.on('theme', () => { source?.theme() })
+const themeSubscription = orca.on('theme', () => cards.theme())
 window.addEventListener('pagehide', () => {
-  disposed = true
-  subscription.dispose()
-  themeSubscription.dispose()
-  source?.dispose()
-  markdown.dispose()
+  disposed = true; subscription.dispose(); themeSubscription.dispose(); cards.dispose()
 }, { once: true })
-void createSourceEditor(editor, (key, text) => {
-  limitMessage = ''
-  void session.save(text, key)
-}, editorFailed, () => {
-  limitMessage = `Notes are limited to ${settings.view.limit} characters. The edit was not applied.`
-  render()
-}).then(value => {
-  if (disposed) { value.dispose(); return }
-  source = value
-  render()
-}).catch(editorFailed)
 void followFocus()

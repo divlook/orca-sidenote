@@ -24,7 +24,6 @@ async function fixture(t, { merge = false } = {}) {
   git('add', '.'); git('commit', '-m', 'Release plugin')
   if (merge) { git('checkout', 'main'); git('merge', '--no-ff', 'changeset-release/main', '-m', 'Merge release') }
   const sha = git('rev-parse', 'HEAD')
-  // A later main commit must never become the release target, even on rerun.
   await writeFile(join(cwd, 'later.txt'), 'later')
   git('add', '.'); git('commit', '-m', 'Later main work')
   const event = { pull_request: { merged: true, merge_commit_sha: sha,

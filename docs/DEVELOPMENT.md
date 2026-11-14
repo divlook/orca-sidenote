@@ -2,7 +2,7 @@
 
 ## Prerequisites and setup
 
-This setup targets a local macOS development folder. Install Git, Orca, Node.js 20 or later, and npm. Start Orca. The [manifest](../orca-plugin.json) states the Orca compatibility requirement.
+This setup targets a local macOS development folder. Install Git, Orca, Node.js 22 or later, and npm. Start Orca. The [manifest](../orca-plugin.json) states the Orca compatibility requirement.
 
 The worker requires `/Applications/Orca.app/Contents/Resources/bin/orca`, even if another `orca` executable exists. The commands below use that path.
 
@@ -13,13 +13,14 @@ git clone https://github.com/divlook/orca-sidenote.git
 cd orca-sidenote
 ```
 
-A fresh checkout may lack the ignored `.orca/types/` directory. Generate the API types, install dependencies, build assets, and check types:
+A fresh checkout may lack the ignored `.orca/types/` directory. Generate the API types, install dependencies, build assets, check types, and run the portable tests:
 
 ```sh
 /Applications/Orca.app/Contents/Resources/bin/orca plugin types . --json
 npm ci
 npm run build
 npm run typecheck
+npm test
 ```
 
 The build deletes and recreates `dist/`. Keep generated bundles, assets, and notices with their source in a distribution commit. Orca installs committed Git files without running the build. See [Release](RELEASE.md) and [Notices](NOTICES.md).

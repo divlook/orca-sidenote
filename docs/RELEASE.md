@@ -9,7 +9,7 @@ The package stays `private: true`. Orca distributes this plugin through Git, not
 3. Run `npm ci` and `npm run build`. Include runtime source, the complete generated `dist/`, project LICENSE, and [third-party notices](NOTICES.md) in the same distribution commit.
 4. Check for private notes, paths, screenshots, and local settings. Exclude `node_modules/` and `.orca/`.
 
-Do not distribute `dist/` alone. The manifest points to `src/worker.mjs` and `src/panel.html`. The worker imports `src/focus.ts`. The HTML uses source CSS and built assets.
+Do not distribute `dist/` alone. The manifest points to `src/worker.mjs` and `src/panel.html`. The worker imports `src/worktree/focus.ts`. The HTML uses source CSS and built assets.
 
 Orca installs files from an exact Git commit or tag without running npm or the build. `/Applications/Orca.app/Contents/Resources/bin/orca plugin release-entry . --json` uses committed HEAD, not uncommitted files. Building does not commit them. There is no separate release-asset packaging pipeline.
 

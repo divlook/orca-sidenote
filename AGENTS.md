@@ -11,6 +11,7 @@ Write repository documentation in English. Preserve user notes and settings. Use
 
 ## Read by task
 
+- Naming or describing product concepts: read the [Glossary](GLOSSARY.md).
 - Setup, build, load, or approval: [Development](docs/DEVELOPMENT.md).
 - Tests, manual checks, or verification scope: [Verification](docs/VERIFICATION.md).
 - Runtime ownership, storage formats, or editor invariants: [Architecture](docs/ARCHITECTURE.md).
@@ -18,4 +19,4 @@ Write repository documentation in English. Preserve user notes and settings. Use
 - Unload, disable, upgrade, or troubleshoot: [Maintenance](docs/MAINTENANCE.md).
 - Version, publish a Git distribution, or recover a release: [Release](docs/RELEASE.md).
 - Dependency licenses or redistribution: [Notices](docs/NOTICES.md).
-- Prepare or submit a change: [Contributing](CONTRIBUTING.md).
+- Implement, fix, prepare, or submit a change: [Contributing](CONTRIBUTING.md#prepare-a-change).

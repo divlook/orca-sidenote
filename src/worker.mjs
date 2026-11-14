@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { focusedTarget } from './focus.ts'
+import { focusedTarget } from './worktree/focus.ts'
 
 // Use this installation's CLI: the plugin context API omits the focused workspace ID.
 const cli = '/Applications/Orca.app/Contents/Resources/bin/orca'

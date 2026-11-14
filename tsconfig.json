@@ -1,6 +1,9 @@
 {
   "extends": "./.orca/types/tsconfig.json",
-  "compilerOptions": { "lib": ["ES2024", "DOM", "DOM.Iterable"] },
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "typeRoots": ["./.orca/types", "./node_modules/@types"]
+  },
   "include": [
     "src"
   ]
