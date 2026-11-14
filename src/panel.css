@@ -17,9 +17,9 @@ main { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidde
   z-index: 2; padding: 5px 6px; background: var(--orca-background); border-bottom: 1px solid var(--orca-border); border-radius: 6px 6px 0 0; cursor: grab; }
 .card-actions { display: flex; gap: 4px; }
 .note-grip { cursor: grab; }
-.card-toolbar:focus, .note-grip:focus { outline: none; }
+.card-toolbar:focus, .note-grip:focus, .note-summary:focus { outline: none; }
 .card-toolbar:active { cursor: grabbing; }
-.note-summary { padding: 10px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-summary { padding: 10px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; -webkit-user-select: none; user-select: none; }
 .note-source, article { min-width: 0; width: 100%; margin: 0; color: var(--orca-foreground); background: var(--orca-background); }
 .note-source .cm-editor { min-height: 64px; }
 .note-source, .note-preview, .note-summary { border-radius: 0 0 5px 5px; overflow: clip; }

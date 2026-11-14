@@ -9,12 +9,13 @@ type NoteView = NoteSession['view']
 type PreferenceView = NotePreferences['view']
 type CardListOptions = {
   list: HTMLElement; panel: HTMLElement; deleteDialog: HTMLDialogElement;
+  minimizeAll: HTMLButtonElement; expandAll: HTMLButtonElement;
   session: NoteSession; preferences: () => PreferenceView; changed: () => void;
   report: (error: unknown) => void; openLink: (href: string, scope: string, epoch: number) => Promise<unknown>; focusAdd: () => void;
 }
 
 export function createNoteCards(options: CardListOptions) {
-  const { list, panel, deleteDialog, session, preferences, changed, report, openLink, focusAdd } = options
+  const { list, panel, deleteDialog, minimizeAll, expandAll, session, preferences, changed, report, openLink, focusAdd } = options
   const deleteCancel = deleteDialog.querySelector<HTMLButtonElement>('#delete-note-cancel')!
   const deleteConfirm = deleteDialog.querySelector<HTMLButtonElement>('#delete-note-confirm')!
   const deleteError = deleteDialog.querySelector<HTMLElement>('#delete-note-error')!
@@ -39,8 +40,8 @@ export function createNoteCards(options: CardListOptions) {
     grip: '<circle cx="7" cy="5" r="1"/><circle cx="13" cy="5" r="1"/><circle cx="7" cy="10" r="1"/><circle cx="13" cy="10" r="1"/><circle cx="7" cy="15" r="1"/><circle cx="13" cy="15" r="1"/>',
     eye: '<path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6Z"/><circle cx="10" cy="10" r="2.5"/>',
     pencil: '<path d="m4 13-1 4 4-1L17 6l-3-3Z"/><path d="m12 5 3 3"/>',
-    minimize: '<path d="M2 7h5V2m11 5h-5V2M2 13h5v5m11-5h-5v5"/>',
-    expand: '<path d="M7 2H2v5m11-5h5v5M2 13v5h5m11-5v5h-5"/>',
+    minimize: '<path d="M10 2v5m-3-3 3 3 3-3M10 18v-5m-3 3 3-3 3 3M2 10h3m3 0h4m3 0h3"/>',
+    expand: '<path d="M3 2h14M3 18h14M10 8V4m-3 3 3-3 3 3M10 12v4m-3-3 3 3 3-3"/>',
     trash: '<path d="M3 5h14M7 5V2h6v3M5 5l1 13h8l1-13M8 8v7m4-7v7"/>'
   }
   function icon(button: HTMLButtonElement, label: string, drawing: string) {
@@ -56,6 +57,32 @@ export function createNoteCards(options: CardListOptions) {
   function writable(card?: Card) {
     const view = session.view
     return view.ready && preferences().ready && (!card || card.scope === view.scopeKey && !card.error && !!card.source)
+  }
+  const bulkButtons = [minimizeAll, expandAll]
+  icon(minimizeAll, 'Minimize all notes', icons.minimize)
+  icon(expandAll, 'Expand all notes', icons.expand)
+  const keepCardFocus = (event: PointerEvent) => { if (event.button === 0) event.preventDefault() }
+  const setAllMinimized = (event: MouseEvent) => {
+    if (disposed || !writable()) return
+    const minimized = event.currentTarget === minimizeAll
+    const focusedCard = document.activeElement?.closest('.note-card')
+    let changed = false
+    for (const note of session.view.notes) {
+      const card = cards.get(note.key)
+      if (!card || card.collapsed === minimized) continue
+      if (minimized && card.node === focusedCard) {
+        card.node.querySelector<HTMLElement>('.card-toolbar')!.focus({ preventScroll: true })
+      }
+      card.collapsed = minimized
+      // Source measurements run after the batched render below.
+      if (!minimized && !card.reading) card.source?.show(false)
+      changed = true
+    }
+    if (changed) render()
+  }
+  for (const control of bulkButtons) {
+    control.addEventListener('pointerdown', keepCardFocus)
+    control.addEventListener('click', setAllMinimized)
   }
   function bindCardBlur(card: Card) {
     let frame: number | undefined
@@ -117,6 +144,7 @@ export function createNoteCards(options: CardListOptions) {
     const body = document.createElement('div'); body.className = 'note-source'
     const preview = document.createElement('article'); preview.className = 'note-preview'; preview.hidden = true
     const summary = document.createElement('div'); summary.className = 'note-summary'; summary.hidden = true
+    summary.tabIndex = -1
     node.append(toolbar, summary, body, preview)
     const card: Card = { key: note.key, id: note.id, scope, node, body, preview, summary, mode, collapse, trash,
       controls: [grip, mode, collapse, trash], reading: preferences().defaultMode === 'reading', collapsed: false, error: '', text: note.text,
@@ -128,9 +156,15 @@ export function createNoteCards(options: CardListOptions) {
     }
     cards.set(card.key, card)
     bindCardBlur(card)
+    const edit = () => {
+      if (!writable(card)) return
+      card.reading = false; card.collapsed = false; render()
+      card.source?.show(true)
+    }
+    summary.addEventListener('click', edit)
     mode.addEventListener('click', () => {
-      card.reading = !card.reading; render()
-      if (!card.collapsed && !card.reading) card.source?.show(true)
+      if (card.reading) { edit(); return }
+      card.reading = true; render()
     })
     collapse.addEventListener('click', () => {
       card.collapsed = !card.collapsed; render()
@@ -228,6 +262,7 @@ export function createNoteCards(options: CardListOptions) {
   let renderedDefaultMode: 'editing' | 'reading' | undefined
   function reconcile(view: NoteView, preference: PreferenceView): void {
     if (disposed) return
+    for (const control of bulkButtons) control.disabled = !view.ready || !preference.ready || view.notes.length === 0
     if (preference.ready && renderedDefaultMode !== preference.defaultMode) {
       renderedDefaultMode = preference.defaultMode
       for (const card of cards.values()) {
@@ -345,6 +380,10 @@ export function createNoteCards(options: CardListOptions) {
     dispose() {
       disposed = true
       unbindDialog(); deleteConfirm.removeEventListener('click', confirmDeletion)
+      for (const control of bulkButtons) {
+        control.removeEventListener('pointerdown', keepCardFocus)
+        control.removeEventListener('click', setAllMinimized)
+      }
       document.removeEventListener('pointerdown', resetPointer, true)
       document.removeEventListener('pointerup', resetPointer, true)
       document.removeEventListener('dragend', resetPointer, true)

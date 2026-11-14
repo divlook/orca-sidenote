@@ -30,6 +30,7 @@ const links = bindNoteLinks({
 const cards = createNoteCards({
   list: element('note-list'), panel, session, preferences: () => settings.view, changed: render, report,
   deleteDialog: element<HTMLDialogElement>('delete-note'),
+  minimizeAll: element<HTMLButtonElement>('minimize-all-notes'), expandAll: element<HTMLButtonElement>('expand-all-notes'),
   openLink: (href, scope, epoch) => links.open(href, scope, epoch),
   focusAdd: () => addButtons[0].focus({ preventScroll: true })
 })
