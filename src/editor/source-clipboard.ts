@@ -1,6 +1,7 @@
 import { EditorSelection, type EditorState } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import { rawEdit, sourceEOL, rawPosition, sourceField } from './source-state'
+import { escapeLinkLabel, ordinaryLinkLabel } from './source-formatting'
 
 export type SourceClipboard = { copied?: { text: string; linewise: boolean } }
 
@@ -21,11 +22,23 @@ export function selectedSource(state: EditorState) {
 }
 
 export function pasteSource(view: EditorView, text: string, linewise = false, selected = view.state.selection): void {
+  if (view.state.readOnly || view.composing) return
   const ranges = selected.ranges
   const pieces = text.split(/\r\n|\r|\n/)
-  const edits = ranges.map((range, index) => ({ from: linewise && range.empty ? view.state.doc.lineAt(range.head).from : range.from,
-    to: linewise && range.empty ? view.state.doc.lineAt(range.head).from : range.to,
-    insert: !linewise && ranges.length > 1 && pieces.length === ranges.length ? pieces[index] : text }))
+  let url = false
+  if (!linewise && /^https?:\/\/[^\s<>\\]+$/i.test(text)) {
+    try { url = !!new URL(text).hostname } catch { /* Ordinary paste retains invalid URLs exactly. */ }
+  }
+  // Marked emits href ampersands verbatim; encode them for the DOM's entity
+  // decoding. Backslash escapes protect Markdown parentheses and table pipes.
+  const edits = ranges.map((range, index) => {
+    const link = url && ordinaryLinkLabel(view.state, range)
+    return { from: linewise && range.empty ? view.state.doc.lineAt(range.head).from : range.from,
+      to: linewise && range.empty ? view.state.doc.lineAt(range.head).from : range.to,
+      insert: link
+        ? `[${escapeLinkLabel(view.state.sliceDoc(range.from, range.to))}](${text.replaceAll('&', '&amp;').replace(/[()|]/g, '\\$&')})`
+        : !linewise && ranges.length > 1 && pieces.length === ranges.length ? pieces[index] : text }
+  })
     .filter((edit, index, all) => !linewise || index === 0 || edit.from !== all[index - 1].from)
   const changes = view.state.changes(edits)
   const selection = linewise ? selected.map(changes)

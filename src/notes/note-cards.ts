@@ -10,11 +10,11 @@ type PreferenceView = NotePreferences['view']
 type CardListOptions = {
   list: HTMLElement; panel: HTMLElement; deleteDialog: HTMLDialogElement;
   session: NoteSession; preferences: () => PreferenceView; changed: () => void;
-  report: (error: unknown) => void; openExternal: (href: string) => Promise<unknown>; focusAdd: () => void;
+  report: (error: unknown) => void; openLink: (href: string, scope: string, epoch: number) => Promise<unknown>; focusAdd: () => void;
 }
 
 export function createNoteCards(options: CardListOptions) {
-  const { list, panel, deleteDialog, session, preferences, changed, report, openExternal, focusAdd } = options
+  const { list, panel, deleteDialog, session, preferences, changed, report, openLink, focusAdd } = options
   const deleteCancel = deleteDialog.querySelector<HTMLButtonElement>('#delete-note-cancel')!
   const deleteConfirm = deleteDialog.querySelector<HTMLButtonElement>('#delete-note-confirm')!
   const deleteError = deleteDialog.querySelector<HTMLElement>('#delete-note-error')!
@@ -119,7 +119,7 @@ export function createNoteCards(options: CardListOptions) {
     node.append(toolbar, summary, body, preview)
     const card: Card = { key: note.key, id: note.id, scope, node, body, preview, summary, mode, collapse, trash,
       controls: [grip, mode, collapse, trash], reading: preferences().defaultMode === 'reading', collapsed: false, error: '', text: note.text,
-      markdown: createPreview(preview, openExternal, report, (key, text, marker, epoch) => {
+      markdown: createPreview(preview, href => openLink(href, card.scope, session.view.epoch), report, (key, text, marker, epoch) => {
         const current = session.view.notes.find(value => value.key === key)
         return writable(card) && card.reading && !card.collapsed && current?.text === text
           && session.view.epoch === epoch && !!card.source?.toggleTask(key, text, marker, epoch)

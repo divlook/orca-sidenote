@@ -27,7 +27,7 @@ The build deletes and recreates `dist/`. Keep generated bundles, assets, and not
 
 ## Load the development folder
 
-Load only a trusted checkout. The manifest uses `trusted-worker`, which runs Node code with your account permissions. `workspace:read` supports worktree-change events. `storage:own` stores notes and settings. Later edits in an approved development folder can run without renewed approval. Review access again when capabilities or execution behavior change.
+Load only a trusted checkout. The manifest uses `trusted-worker`, which runs Node code with your account permissions. `workspace:read` supports worktree-change events, `workspace:write` lets the worker open worktree files in Orca's editor, and `storage:own` stores notes and settings. The added `workspace:write` permission requires users to review and approve access again. Later edits in an approved development folder can run without renewed approval. Review access again when capabilities or execution behavior change.
 
 Load the folder into the local environment:
 

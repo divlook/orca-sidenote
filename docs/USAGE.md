@@ -10,6 +10,12 @@ Minimized cards show a single-line plain-text summary of the first nonempty top-
 
 Use reading mode to read formatted Markdown and toggle task checkboxes with a click or Space. Single line breaks in paragraphs and list items remain visible; blank lines still separate blocks. Changes save normally and can be undone in that note's editor. Raw HTML checkboxes stay read-only. Images do not load. Long cards keep their toolbar visible while you scroll.
 
+In reading mode, open HTTP and HTTPS links in your default browser, a new Orca browser tab, or a destination chosen each time. In note settings, **Open web links in** offers **Default browser** (the default), **Orca browser**, and **Ask every time**. `mailto:` links open externally. For a local worktree, relative file links resolve from its root; absolute paths and `file://` links within it open in Orca's editor. Remote worktrees can open web links through the same configured destinations. Remote file links are unsupported and show an error. Links outside the worktree, unsupported protocols, and links from an ambiguous, stale, or wrong-host scope are rejected with an error.
+
+Before opening a local file, SideNote resolves its canonical path and checks that it is inside the worktree. Orca's editor API does not guard against a concurrent filesystem change between that check and opening the file.
+
+Opening files requires the new `workspace:write` permission. Review and approve the requested access when Orca asks; approval does not open a link automatically.
+
 The subtitle shows the current project and worktree. During **Switching…**, editing stays disabled until the new collection is ready. An ambiguous or unavailable location blocks editing. A confirmed development installation shows a **DEV** badge.
 
 ## Code blocks
@@ -31,7 +37,7 @@ Code blocks preserve whitespace without syntax highlighting. Mermaid fences disp
 
 Turn confirmation Off to make future trash clicks delete immediately and irreversibly. Changing the setting itself deletes nothing, and you can turn it back on at any time. It does not affect the separate **Delete all notes…** action.
 
-**Show Source line numbers** controls the gutter for all notes and defaults to On. **Default note mode** defaults to Editing. Choose Reading to open existing notes in reading mode and return edited notes to reading mode when focus leaves the card; new notes start in editing mode. Settings apply and save automatically. If saving a setting fails, its last successful value applies; change the control again to retry. Unreadable preferences block editing until each is explicitly replaced.
+**Show Source line numbers** controls the gutter for all notes and defaults to On. **Default note mode** defaults to Editing. Choose Reading to open existing notes in reading mode and return edited notes to reading mode when focus leaves the card; new notes start in editing mode. Settings apply and save automatically. If saving a setting fails, its last successful value applies; change the control again to retry. Unreadable deletion confirmation, line-number, or default-mode preferences block editing until explicitly replaced. An unreadable web-link preference blocks web links, not editing.
 
 There is no plugin character limit or character counter. Host storage quotas still apply, and writes can fail.
 
@@ -39,7 +45,13 @@ There is no plugin character limit or character counter. Host storage quotas sti
 
 On macOS, **Cmd+Option+Up/Down** adds a cursor above or below. Typing edits all cursors. Select the keyboard icon beside **Note** for the shortcut list. Press **Esc** or select **Close** to dismiss it.
 
-Enter continues unordered lists, increments ordered lists, and creates unchecked tasks. Indentation is preserved. Enter on an empty item exits that list level. Ordered markers use at most nine digits and repeat the maximum number when reached. Quoted lists, literal code or HTML, selections, and mixed list/non-list cursor groups retain normal Enter behavior. Pasted Markdown is not rewritten.
+In editing mode, typing `(`, `[`, `{`, `"`, `'`, or a backtick wraps selected text with the matching delimiters and keeps the text selected. An empty cursor inserts only the typed character, without auto-closing. Asterisks and underscores are not intercepted for wrapping.
+
+Use **Cmd+B** for bold, **Cmd+I** for italic, and **Cmd+Shift+X** for strikethrough. These insert Markdown delimiters rather than toggling existing formatting. **Cmd+K** creates a Markdown link: selected text becomes the escaped label and the cursor moves to the empty destination; with no selection, the cursor moves inside the empty label.
+
+Pasting a single HTTP or HTTPS URL over selected ordinary single-line text creates a Markdown link. This applies to keyboard and context-menu paste. Empty cursors and linewise paste insert the URL as plain text; selections in code, existing links, images, or autolinks are not converted.
+
+Enter continues unordered lists, increments ordered lists, and creates unchecked tasks. Indentation is preserved. Enter on an empty item exits that list level. Ordered markers use at most nine digits and repeat the maximum number when reached. Quoted lists, literal code or HTML, selections, and mixed list/non-list cursor groups retain normal Enter behavior. Other pasted Markdown is not rewritten.
 
 Right-click Source for **Change All Occurrences**, **Cut**, **Copy**, and **Paste**. Clipboard permission failures leave the note unchanged and show an error. Source uses CodeMirror and preserves original Markdown, including mixed line separators.
 

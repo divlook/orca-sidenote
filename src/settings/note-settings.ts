@@ -2,6 +2,8 @@ export const SOURCE_LINE_NUMBERS_KEY = 'settings:source-line-numbers'
 export const CONFIRM_NOTE_DELETION_KEY = 'settings:confirm-note-deletion'
 export const DEFAULT_NOTE_MODE_KEY = 'settings:default-note-mode'
 export type DefaultNoteMode = 'editing' | 'reading'
+export const WEB_LINK_OPENING_KEY = 'settings:web-link-opening'
+export type WebLinkOpening = 'external' | 'orca' | 'ask'
 
 type Reader = { get(key: string): Promise<unknown> }
 type Writer<T = boolean> = { set(key: string, value: T): Promise<void> }
@@ -34,4 +36,14 @@ export async function loadDefaultNoteMode(store: Reader): Promise<DefaultNoteMod
 export async function saveDefaultNoteMode(store: Writer<DefaultNoteMode>, value: DefaultNoteMode): Promise<void> {
   if (value !== 'editing' && value !== 'reading') throw new Error('Default note mode must be Editing or Reading.')
   await store.set(DEFAULT_NOTE_MODE_KEY, value)
+}
+export async function loadWebLinkOpening(store: Reader): Promise<WebLinkOpening> {
+  const value = await store.get(WEB_LINK_OPENING_KEY)
+  if (value === null) return 'external'
+  if (value !== 'external' && value !== 'orca' && value !== 'ask') throw new Error('The stored web link opening setting cannot be read.')
+  return value
+}
+export async function saveWebLinkOpening(store: Writer<WebLinkOpening>, value: WebLinkOpening): Promise<void> {
+  if (value !== 'external' && value !== 'orca' && value !== 'ask') throw new Error('Choose a valid web link opening option.')
+  await store.set(WEB_LINK_OPENING_KEY, value)
 }

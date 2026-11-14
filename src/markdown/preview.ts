@@ -1,13 +1,14 @@
 import { marked, Renderer, type Tokens } from 'marked'
 import DOMPurify from 'dompurify'
 import { mapMarkdownTasks, type TaskMarker } from './markdown-tasks'
+import { parseNoteLink } from './note-links'
 
 export interface MarkdownPreview {
   render(text: string, key?: string | null, ready?: boolean, epoch?: number): void
   suspend(): void
   dispose(): void
 }
-export function createPreview(element: HTMLElement, openExternal: (href: string) => Promise<unknown>, failed: (error: unknown) => void,
+export function createPreview(element: HTMLElement, openLink: (href: string) => Promise<unknown>, failed: (error: unknown) => void,
   toggle: (key: string, text: string, marker: TaskMarker, epoch: number) => boolean): MarkdownPreview {
   let rendered: string | undefined
   let identity: string | null | undefined
@@ -16,13 +17,21 @@ export function createPreview(element: HTMLElement, openExternal: (href: string)
   let currentEpoch = 0
   let renderedEpoch = -1
   let trustedInputs: HTMLInputElement[] = []
-  element.addEventListener('click', event => {
+  let destinations = new WeakMap<Element, string>()
+  const activateLink = (event: Event) => {
     const anchor = event.target instanceof Element ? event.target.closest('a') : null
     if (!anchor) return
     event.preventDefault()
-    const href = anchor.getAttribute('href') ?? ''
-    if (/^(https?:|mailto:)/i.test(href)) void openExternal(href).catch(failed)
-  })
+    const href = destinations.get(anchor)
+    if (href === undefined) return
+    try {
+      parseNoteLink(href)
+      if (!editable || !identity) throw new Error('This note link is no longer available.')
+      void openLink(href).catch(failed)
+    } catch (error) { failed(error) }
+  }
+  element.addEventListener('click', activateLink)
+  element.addEventListener('keydown', event => { if (event.key === 'Enter') { event.stopPropagation(); activateLink(event) } })
   return {
     render(text: string, key: string | null = null, ready = false, epoch = 0) {
       editable = ready
@@ -58,9 +67,27 @@ export function createPreview(element: HTMLElement, openExternal: (href: string)
           { ...paragraph, tokens: [checkbox, ...(paragraph as Tokens.Paragraph).tokens] }, ...token.tokens.slice(2)
         ] })
       }
-      element.innerHTML = DOMPurify.sanitize(marked.parser(parsed.tokens, { renderer }), {
-        USE_PROFILES: { html: true }, FORBID_TAGS: ['img', 'style', 'form'], FORBID_ATTR: ['style']
+      // A template is inert. Remove all native navigation before sanitizing/inserting.
+      const template = document.createElement('template')
+      template.innerHTML = marked.parser(parsed.tokens, { renderer })
+      const links: { id: string; href: string }[] = []
+      for (const anchor of template.content.querySelectorAll('a[href]')) {
+        const id = `${nonce}link-${links.length}`
+        links.push({ id, href: anchor.getAttribute('href')! })
+        anchor.removeAttribute('href')
+        anchor.id = id
+      }
+      element.innerHTML = DOMPurify.sanitize(template.innerHTML, {
+        USE_PROFILES: { html: true }, FORBID_TAGS: ['img', 'style', 'form'], FORBID_ATTR: ['style', 'href', 'xlink:href']
       })
+      destinations = new WeakMap()
+      for (const link of links) {
+        const anchor = element.querySelector<HTMLAnchorElement>(`#${link.id}`)
+        if (!anchor) continue
+        destinations.set(anchor, link.href)
+        anchor.removeAttribute('id')
+        anchor.setAttribute('role', 'link'); anchor.tabIndex = 0
+      }
       for (const input of element.querySelectorAll<HTMLInputElement>('input')) { input.type = 'checkbox'; input.disabled = true }
       for (const task of tasks) {
         const placeholder = element.querySelector(`#${task.id}`)

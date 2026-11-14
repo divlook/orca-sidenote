@@ -65,6 +65,13 @@
         </div>
         <div class="setting-control"><select id="default-note-mode" aria-describedby="default-mode-description"><option value="editing">Editing</option><option value="reading">Reading</option></select></div>
       </section>
+      <section class="setting-row" aria-labelledby="web-links-title">
+        <div class="setting-copy">
+          <h3 id="web-links-title"><label for="web-link-opening">Open web links in</label></h3>
+          <p id="web-links-description">Applies to HTTP and HTTPS links. Email links use your default application. Local file links open in the worktree’s Orca editor; remote file links are not supported.</p>
+        </div>
+        <div class="setting-control"><select id="web-link-opening" aria-describedby="web-links-description"><option value="external">Default browser</option><option value="orca">Orca browser</option><option value="ask">Ask every time</option></select></div>
+      </section>
       <p id="settings-error" role="alert" hidden></p>
     </form>
     <section class="data-section" aria-labelledby="data-title">
@@ -118,6 +125,15 @@
       <p>Restore stops on the first failed request. Its outcome may be unknown; earlier writes are not rolled back. Preview again before retrying.</p>
     </section>
     <pre id="transfer-summary" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+  </dialog>
+  <dialog id="open-note-link" aria-labelledby="open-note-link-title">
+    <h2 id="open-note-link-title">Open web link</h2>
+    <p id="open-note-link-url"></p>
+    <div class="settings-actions">
+      <button id="open-note-link-cancel" type="button" autofocus>Cancel</button>
+      <button id="open-note-link-external" type="button">Default browser</button>
+      <button id="open-note-link-orca" type="button">Orca browser</button>
+    </div>
   </dialog>
   <script type="module" src="../dist/panel.js"></script>
 </body>

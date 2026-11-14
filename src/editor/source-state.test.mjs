@@ -1,10 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
-const bundled = await build({ stdin: { contents: `export * from './src/editor/source-state'; export * from './src/editor/source-commands'; export {pasteSource,selectedSource} from './src/editor/source-clipboard'; export {search,SearchQuery,setSearchQuery,openSearchPanel} from '@codemirror/search'; export {EditorState, EditorSelection, Transaction} from '@codemirror/state'; export {undo,redo} from '@codemirror/commands'`, resolveDir: process.cwd() }, bundle: true, write: false, format: 'esm', platform: 'node' })
-const { EditorState, EditorSelection, Transaction, sourceExtensions, sourceField, exactSource, documentPosition, rawPosition, acceptSourceTransaction, undo, redo, lineOperation, listEnter, insertLine, lineEndCursors, allOccurrences, nextOccurrence, occurrenceSession, pasteSource, selectedSource, search, SearchQuery, setSearchQuery, openSearchPanel } = await import('data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64'))
+import { marked } from 'marked'
+const bundled = await build({ stdin: { contents: `export * from './src/editor/source-state'; export * from './src/editor/source-commands'; export * from './src/editor/source-formatting'; export {markdown,markdownLanguage} from '@codemirror/lang-markdown'; export {pasteSource,selectedSource} from './src/editor/source-clipboard'; export {search,SearchQuery,setSearchQuery,openSearchPanel} from '@codemirror/search'; export {EditorState, EditorSelection, Transaction} from '@codemirror/state'; export {undo,redo} from '@codemirror/commands'`, resolveDir: process.cwd() }, bundle: true, write: false, format: 'esm', platform: 'node' })
+const { EditorState, EditorSelection, Transaction, sourceExtensions, sourceField, exactSource, documentPosition, rawPosition, acceptSourceTransaction, undo, redo, lineOperation, listEnter, insertLine, lineEndCursors, allOccurrences, nextOccurrence, occurrenceSession, pasteSource, selectedSource, search, SearchQuery, setSearchQuery, openSearchPanel, markdown, markdownLanguage, markdownMarker, markdownLink, wrapSelectedText } = await import('data:text/javascript;base64,' + Buffer.from(bundled.outputFiles[0].text).toString('base64'))
 function fixture(raw, readOnly = false) {
-  let state = EditorState.create({ doc: raw, extensions: [sourceExtensions(raw), occurrenceSession, search(), EditorState.allowMultipleSelections.of(true), EditorState.readOnly.of(readOnly)] })
+  let state = EditorState.create({ doc: raw, extensions: [sourceExtensions(raw), occurrenceSession, search(), markdown({ base: markdownLanguage, addKeymap: false, pasteURLAsLink: false }), EditorState.allowMultipleSelections.of(true), EditorState.readOnly.of(readOnly)] })
   let writable = true
   let rejected = 0
   const dispatch = transaction => {
@@ -222,4 +223,114 @@ test('visible Find regex selects matches even with an empty whitespace caret', (
   f.edit({ selection: EditorSelection.cursor(3), effects: setSearchQuery.of(new SearchQuery({ search: 'a+', regexp: true })) })
   f.command(allOccurrences)
   assert.deepEqual(f.state.selection.ranges.map(range => [range.from, range.to]), [[0, 2], [4, 7]])
+})
+
+test('selection wrappers retain direction raw separators and mixed empty cursors in one undo', () => {
+  for (const [opening, closing] of [['(', ')'], ['[', ']'], ['{', '}'], ['"', '"'], ["'", "'"], ['`', '`']]) {
+    const f = fixture('a\r\nb\rc\nend')
+    f.edit({ selection: EditorSelection.create([EditorSelection.range(3, 0), EditorSelection.cursor(6)], 1) })
+    assert.equal(f.command(view => wrapSelectedText(view, opening)), true)
+    assert.equal(f.raw, `${opening}a\r\nb${closing}\rc\n${opening}end`)
+    assert.deepEqual(f.state.selection.ranges.map(r => [r.anchor, r.head]), [[4, 1], [9, 9]])
+    assert.equal(f.state.selection.mainIndex, 1)
+    f.undo(); assert.equal(f.raw, 'a\r\nb\rc\nend')
+    f.redo(); assert.equal(f.raw.startsWith(opening), true)
+    const forward = fixture('label')
+    forward.edit({ selection: EditorSelection.range(0, 5) })
+    assert.equal(forward.command(view => wrapSelectedText(view, opening)), true)
+    assert.equal(forward.raw, `${opening}label${closing}`)
+    assert.deepEqual(forward.state.selection.ranges.map(r => [r.anchor, r.head]), [[1, 6]])
+  }
+  const f = fixture('label')
+  for (const text of ['(', "'"]) assert.equal(f.command(view => wrapSelectedText(view, text)), false)
+  f.edit({ selection: EditorSelection.range(0, 5) })
+  for (const text of ['*', '_']) assert.equal(f.command(view => wrapSelectedText(view, text)), false)
+})
+
+test('Markdown shortcuts insert markers and link destination without placeholders', () => {
+  for (const marker of ['**', '*', '~~']) {
+    const f = fixture('label')
+    f.edit({ selection: EditorSelection.range(5, 0) })
+    f.command(markdownMarker(marker))
+    assert.equal(f.raw, `${marker}label${marker}`)
+    assert.deepEqual([f.state.selection.main.anchor, f.state.selection.main.head], [5 + marker.length, marker.length])
+    f.undo(); assert.equal(f.raw, 'label')
+    const empty = fixture('')
+    empty.command(markdownMarker(marker))
+    assert.equal(empty.raw, marker + marker)
+    assert.equal(empty.state.selection.main.head, marker.length)
+  }
+  const f = fixture('a[b] *c*\\')
+  f.edit({ selection: EditorSelection.range(0, f.state.doc.length) })
+  f.command(markdownLink)
+  assert.equal(f.raw, '[a\\[b\\] \\*c\\*\\\\]()')
+  assert.equal(f.state.selection.main.head, f.state.doc.length - 1)
+  f.undo(); assert.equal(f.raw, 'a[b] *c*\\')
+  const empty = fixture('')
+  empty.command(markdownLink)
+  assert.equal(empty.raw, '[]()'); assert.equal(empty.state.selection.main.head, 1)
+  const literal = fixture('&copy; <b>')
+  literal.edit({ selection: EditorSelection.range(0, literal.state.doc.length) })
+  literal.command(markdownLink)
+  assert.equal(literal.raw, '[\\&copy; \\<b\\>]()')
+  assert.equal(marked.parse(literal.raw), '<p><a href=\"\">&amp;copy; &lt;b&gt;</a></p>\n')
+})
+
+test('URL paste converts only ordinary labels and preserves empty mixed cursors exactly', () => {
+  const url = 'https://example.com/a(b)?x=1'
+  const f = fixture('a]b *c*\r\nend')
+  f.edit({ selection: EditorSelection.create([EditorSelection.range(7, 0), EditorSelection.cursor(11)], 1) })
+  f.command(view => pasteSource(view, url))
+  assert.equal(f.raw, '[a\\]b \\*c\\*](https://example.com/a\\(b\\)?x=1)\r\nend' + url)
+  assert.equal(f.state.selection.mainIndex, 1)
+  f.undo(); assert.equal(f.raw, 'a]b *c*\r\nend')
+  f.redo(); assert.equal(f.raw.includes('\\(b\\)'), true)
+  const entity = fixture('&copy;')
+  entity.edit({ selection: EditorSelection.range(0, 6) })
+  entity.command(view => pasteSource(view, 'https://example.com/?q=&copy;'))
+  assert.equal(entity.raw, '[\\&copy;](https://example.com/?q=&amp;copy;)')
+  assert.equal(marked.parse(entity.raw).includes('href="https://example.com/?q=&amp;copy;"'), true)
+  assert.equal(marked.parse(entity.raw).includes('>&amp;copy;</a>'), true)
+  for (const url of ['https://example.com/?q=&amp;', 'https://example.com/?q=&#169;', 'https://example.com/?q=&#xA9;']) {
+    const escaped = fixture('label')
+    escaped.edit({ selection: EditorSelection.range(0, 5) })
+    escaped.command(view => pasteSource(view, url))
+    assert.equal(marked.parse(escaped.raw).includes(`href="${url.replaceAll('&', '&amp;')}"`), true)
+  }
+  const table = fixture('| heading |\n| --- |\n| label |')
+  const start = table.state.doc.toString().indexOf('label')
+  table.edit({ selection: EditorSelection.range(start, start + 5) })
+  table.command(view => pasteSource(view, 'https://example.com/a|b'))
+  const tableToken = marked.lexer(table.raw)[0]
+  assert.equal(tableToken.rows[0].length, 1)
+  assert.equal(tableToken.rows[0][0].tokens[0].href, 'https://example.com/a|b')
+  for (const raw of ['`label`', '```\nlabel\n```', '    label', '[label](old)', '![label](old)', '[label][ref]\n\n[ref]: /old', '<https://label.com>', 'https://label.com', '[label]: /old', '<span title="label">', '<!-- label -->']) {
+    const excluded = fixture(raw), from = raw.indexOf('label')
+    excluded.edit({ selection: EditorSelection.range(from, from + 5) })
+    excluded.command(view => pasteSource(view, url))
+    assert.equal(excluded.raw, raw.slice(0, from) + url + raw.slice(from + 5), raw)
+  }
+  for (const text of [' https://example.com', 'https://example.com\n', 'mailto:a@example.com', 'https://', 'https://example.com one']) {
+    const plain = fixture('label')
+    plain.edit({ selection: EditorSelection.range(0, 5) })
+    plain.command(view => pasteSource(view, text))
+    assert.equal(plain.raw, text)
+  }
+})
+
+test('formatting and smart paste respect readiness read-only composition and linewise intent', () => {
+  const f = fixture('label\r\nend')
+  f.edit({ selection: EditorSelection.range(0, 5) }); f.block()
+  f.command(markdownMarker('**')); assert.equal(f.raw, 'label\r\nend')
+  f.command(view => pasteSource(view, 'https://example.com')); assert.equal(f.raw, 'label\r\nend')
+  const locked = fixture('label', true)
+  locked.edit({ selection: EditorSelection.range(0, 5) })
+  assert.equal(locked.command(markdownLink), false)
+  locked.command(view => pasteSource(view, 'https://example.com'))
+  assert.equal(locked.raw, 'label')
+  f.allow()
+  f.command(view => { Object.defineProperty(view, 'composing', { value: true }); assert.equal(wrapSelectedText(view, '('), false); assert.equal(markdownLink(view), false); pasteSource(view, 'https://example.com') })
+  assert.equal(f.raw, 'label\r\nend')
+  f.command(view => pasteSource(view, 'https://example.com', true))
+  assert.equal(f.raw, 'https://example.com\r\nend')
 })

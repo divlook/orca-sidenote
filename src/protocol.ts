@@ -20,5 +20,6 @@ declare module 'orca' {
   interface PluginRequests {
     'notes.focused': { output: NoteTarget | null }
     'notes.devStatus': { output: true | null }
+    'notes.openLink': { input: { scope: string; href: string }; output: null }
   }
 }

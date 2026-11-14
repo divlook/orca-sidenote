@@ -2,8 +2,11 @@ import { addCursorAbove, addCursorBelow, deleteLine, indentLess, indentMore, sim
 import { closeSearchPanel, openSearchPanel } from '@codemirror/search'
 import type { KeyBinding } from '@codemirror/view'
 import { allOccurrences, insertLine, lineEndCursors, lineOperation, listEnter, nextOccurrence } from './source-commands'
+import { markdownLink, markdownMarker } from './source-formatting'
 
 const shortcuts = {
+  bold: { key: 'Mod-b', display: '⌘B' }, italic: { key: 'Mod-i', display: '⌘I' },
+  strike: { key: 'Mod-Shift-x', display: '⇧⌘X' }, link: { key: 'Mod-k', display: '⌘K' },
   replace: { key: 'Mod-Alt-f', display: '⌘⌥F' },
   escape: { key: 'Escape', display: 'Esc' },
   moveUp: { key: 'Alt-ArrowUp', display: '⌥↑' }, moveDown: { key: 'Alt-ArrowDown', display: '⌥↓' },
@@ -22,6 +25,8 @@ export const changeAllOccurrences = {
 
 export const sourceKeymap: readonly KeyBinding[] = [
   { key: 'Enter', run: listEnter },
+  { key: shortcuts.bold.key, run: markdownMarker('**') }, { key: shortcuts.italic.key, run: markdownMarker('*') },
+  { key: shortcuts.strike.key, run: markdownMarker('~~') }, { key: shortcuts.link.key, run: markdownLink },
   { key: shortcuts.replace.key, run: editor => { openSearchPanel(editor); editor.dom.querySelector<HTMLInputElement>('input[name="replace"]')?.focus(); return true }, scope: 'editor search-panel' },
   { key: shortcuts.escape.key, run: editor => closeSearchPanel(editor) || simplifySelection(editor), scope: 'editor search-panel' },
   { key: shortcuts.moveUp.key, run: lineOperation(-1, false) }, { key: shortcuts.moveDown.key, run: lineOperation(1, false) },
@@ -38,6 +43,11 @@ export const sourceShortcutGroups = [
     ['Select all', '⌘A'],
     ['Cut / Copy / Paste', '⌘X / ⌘C / ⌘V'],
     ['Undo / Redo', '⌘Z / ⇧⌘Z']
+  ]],
+  ['Markdown', [
+    ['Bold', shortcuts.bold.display], ['Italic', shortcuts.italic.display],
+    ['Strikethrough', shortcuts.strike.display], ['Link', shortcuts.link.display],
+    ['Wrap selected text', `( / [ / { / " / ' / \``]
   ]],
   ['Find', [
     ['Find', '⌘F'],

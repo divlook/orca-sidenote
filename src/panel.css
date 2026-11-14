@@ -38,6 +38,8 @@ article code { font-size: 12px; }
 article :not(pre) > code { color: var(--orca-foreground); background: var(--orca-muted);
   padding: .12em .32em; border: 1px solid var(--orca-border); border-radius: 4px; box-decoration-break: clone; }
 article a { color: var(--orca-foreground); text-decoration: underline; text-underline-offset: .15em; }
+article a[role="link"] { cursor: pointer; }
+article a[role="link"]:focus-visible { outline: 2px solid var(--orca-ring); outline-offset: 2px; }
 article ul, article ol { padding-inline-start: 2em; }
 article .markdown-task-checkbox { margin: 0; vertical-align: middle; }
 article table { border-collapse: collapse; }
@@ -86,16 +88,18 @@ article blockquote { margin-left: 0; padding-left: 12px; border-left: 3px solid 
 #settings-error { color: var(--orca-destructive); }
 .settings-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 button:disabled { cursor: default; opacity: .5; }
-#delete-note, #delete-notes, #note-transfer { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
+#delete-note, #delete-notes, #note-transfer, #open-note-link { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
   margin: auto; padding: 12px; overflow: auto; border: 1px solid var(--orca-border); border-radius: 8px;
   color: var(--orca-foreground); background: var(--orca-background); font: inherit; }
-#delete-note::backdrop, #delete-notes::backdrop, #note-transfer::backdrop { background: rgb(0 0 0 / 45%); }
+#delete-note::backdrop, #delete-notes::backdrop, #note-transfer::backdrop, #open-note-link::backdrop { background: rgb(0 0 0 / 45%); }
 #delete-note h2, #delete-notes h2 { margin: 0; font-size: 14px; }
 .delete-section { margin-top: 20px; border-top: 1px solid var(--orca-border); }
 #delete-notes-open { color: var(--orca-foreground); text-decoration: underline; }
 #delete-note-confirm, #delete-notes-confirm { padding: 5px 10px; border-radius: 4px; color: var(--orca-destructive-foreground); background: var(--orca-destructive); }
 #delete-note-error, #delete-notes-error { color: var(--orca-destructive); }
 #delete-note .settings-actions, #delete-notes .settings-actions { gap: 12px; }
+#open-note-link .settings-actions { gap: 12px; flex-wrap: wrap; }
+#open-note-link-url { overflow-wrap: anywhere; }
 .data-section { margin-top: 20px; border-top: 1px solid var(--orca-border); }
 .data-section h3 { margin: 14px 0 0; font-size: 13px; }
 #transfer-open { padding: 6px 8px; border: 1px solid var(--orca-border); border-radius: 4px; }

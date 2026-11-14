@@ -30,7 +30,8 @@
   "pluginApi": 1,
   "main": "src/worker.mjs",
   "contributes": {
-    "panels": [{ "id": "sidenote", "title": "Note", "icon": "file-text", "entry": "src/panel.html", "ui": "html" }]
+    "panels": [{ "id": "sidenote", "title": "Note", "icon": "file-text", "entry": "src/panel.html", "ui": "html" }],
+    "events": [{ "on": "workspace.changed" }]
   },
-  "capabilities": [{ "kind": "storage:own" }, { "kind": "workspace:read" }]
+  "capabilities": [{ "kind": "storage:own" }, { "kind": "workspace:read" }, { "kind": "workspace:write" }]
 }

@@ -10,6 +10,7 @@ import { pasteSource, selectedSource, type SourceClipboard } from './source-clip
 import { sourceMenu } from './source-menu'
 import { sourceKeymap } from './source-actions'
 import { sourceTheme } from './source-theme'
+import { selectionWrapping } from './source-formatting'
 
 export interface SourceEditor {
   sync(text: string, ready: boolean, epoch: number, invalidation?: number): void
@@ -37,7 +38,7 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
     return payload
   }
   function extensions(text: string) {
-    return [sourceExtensions(text), occurrenceSession, EditorState.allowMultipleSelections.of(true),
+    return [sourceExtensions(text), occurrenceSession, selectionWrapping, EditorState.allowMultipleSelections.of(true),
       writable.of([EditorState.readOnly.of(!enabled), EditorView.editable.of(enabled)]),
       numbers.of(visibleNumbers ? lineNumbers() : []), palette.of(sourceTheme()),
       EditorView.contentAttributes.of({ 'aria-label': 'Note source', 'aria-multiline': 'true' }),
