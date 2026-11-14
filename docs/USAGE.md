@@ -2,7 +2,7 @@
 
 Open **Note** in Orca's right sidebar. Each host and folder has an ordered collection of Markdown notes. The **Add note** icon in the heading and the button after the last card append a blank, expanded note in editing mode and focus its body. Cards grow with their content; only the outer list scrolls vertically. Long Preview code blocks can scroll horizontally.
 
-Each card has a drag grip and three actions: **Read note / Edit note**, **Minimize note / Expand note**, and **Delete note**. Drag the toolbar outside the action buttons to a blue insertion line to reorder cards, or focus the grip and press **Option+Up/Down**. Order saves for the current host and path.
+Each card has a drag grip and three actions: **Read note / Edit note**, **Minimize note / Expand note**, and **Delete note**. Drag the toolbar outside the action buttons to a blue insertion line to reorder cards, or click the grip and press **Option+Up/Down**. Tab skips the grip and still reaches the three action buttons. Order saves for the current host and path.
 
 When focus leaves a card whose content is empty or only whitespace, the card is deleted without a confirmation dialog. Existing empty cards are not swept on load. Moving focus within a card, dragging, readiness changes, and switching worktrees do not trigger this deletion. If queued typing makes the note nonempty, it is retained.
 

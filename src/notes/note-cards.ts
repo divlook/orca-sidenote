@@ -110,6 +110,7 @@ export function createNoteCards(options: CardListOptions) {
     const node = document.createElement('section'); node.className = 'note-card'; node.dataset.noteId = note.id
     const toolbar = document.createElement('div'); toolbar.className = 'card-toolbar'; toolbar.draggable = true; toolbar.setAttribute('role', 'toolbar'); toolbar.setAttribute('aria-label', 'Note actions')
     const grip = button(toolbar, 'Drag to reorder; Option+Up or Down to move', icons.grip); grip.classList.add('note-grip')
+    grip.tabIndex = -1
     const actions = document.createElement('div'); actions.className = 'card-actions'; toolbar.append(actions)
     const mode = button(actions, 'Read note', icons.eye)
     const collapse = button(actions, 'Minimize note', icons.minimize), trash = button(actions, 'Delete note', icons.trash)

@@ -8,7 +8,8 @@ h1 { margin: 0; font-size: 14px; font-weight: 600; }
 #dev-badge { display: inline-block; padding: 0 4px; border: 1px solid var(--orca-border);
   border-radius: 4px; color: var(--orca-muted-foreground); font-size: 10px; vertical-align: 1px; }
 button { font: inherit; cursor: pointer; color: var(--orca-muted-foreground); background: none; border: 0; }
-button:focus-visible { outline: 2px solid var(--orca-ring); outline-offset: -2px; }
+button:focus:not(:focus-visible) { outline: none; }
+button:focus-visible { outline: 1px solid var(--orca-muted-foreground); outline-offset: -1px; }
 main { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; padding: 2px; }
 #note-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .note-card { min-width: 0; border: 1px solid var(--orca-border); border-radius: 6px; background: var(--orca-background); }
@@ -16,6 +17,7 @@ main { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidde
   z-index: 2; padding: 5px 6px; background: var(--orca-background); border-bottom: 1px solid var(--orca-border); border-radius: 6px 6px 0 0; cursor: grab; }
 .card-actions { display: flex; gap: 4px; }
 .note-grip { cursor: grab; }
+.card-toolbar:focus, .note-grip:focus { outline: none; }
 .card-toolbar:active { cursor: grabbing; }
 .note-summary { padding: 10px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-source, article { min-width: 0; width: 100%; margin: 0; color: var(--orca-foreground); background: var(--orca-background); }
