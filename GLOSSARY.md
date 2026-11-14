@@ -14,13 +14,31 @@ The visual presentation of one note, with controls for its mode, minimization, o
 _Avoid_: note (when referring only to the visual container).
 
 **Note collection**:
-The ordered set of notes for one note scope. Reordering changes the collection's order, not the notes' content.
+The ordered set of notes for one note scope, kept in manual order.
 
 **Note scope**:
 The exact host and project or worktree folder path that identifies a note collection, independent of project names and branch labels. Removing a worktree leaves its notes intact; returning to the same host and path returns the same collection.
 _Avoid_: branch notes (for a collection's ownership).
 
+**Manual order**:
+The order of a note collection set by rearranging its notes.
+
+### Note labels
+
+**Note label**:
+An optional, user-defined classification of a note, not a stage that enforces a workflow. A note has at most one label, shown with its name and color.
+_Avoid_: note status, note tag.
+
+**Label catalog**:
+The ordered set of labels shared across projects and worktrees in one SideNote store. Each label has an editable name and palette color; the four default labels are todo, in progress, in review, and done.
+
+**Label filter**:
+A choice of note labels, optionally including unlabeled notes, used to determine which notes are displayed.
+
 ### Card presentation
+
+**Note view preference**:
+A note scope's preference for which notes are displayed, separate from the notes and their manual order.
 
 **Editing mode**:
 The per-note mode for editing Markdown text, labeled **Editing** in settings.
@@ -40,13 +58,13 @@ The saved preference for existing notes' initial mode; when set to Reading, it a
 ### Note data transfers
 
 **Recovery collection**:
-A complete collection held by this panel with unsaved changes or a saving error, kept separately from the stored collection for recovery. It includes note content and order, rather than only the text of a failed edit.
+A complete collection held by this panel with unsaved changes or a saving error, kept separately from the stored collection for recovery. It includes note content, label assignments, and order, rather than only the text of a failed edit.
 
 **Notes backup**:
-A file containing all stored note collections and separate recovery collections from this panel. It excludes preferences, undo history, and unsaved changes held only in other panels.
+A file containing the complete label catalog, all stored note collections and their label assignments, and separate recovery collections from this panel. It excludes preferences, undo history, and unsaved changes held only in other panels.
 
 **Notes restore**:
-The transfer of selected collections from a backup into their original note scopes. Replacement covers a whole collection, including its note order, rather than appending individual notes; unselected collections remain unchanged.
+The transfer of selected collections from a backup into their original note scopes. Replacement covers a whole collection, including its note order and label assignments, rather than appending individual notes. Labels needed by restored notes are merged into the destination catalog; unselected collections remain unchanged.
 
 **Protection file**:
 A backup of stored originals affected by a planned restore replacement, together with this panel's recovery collections. It is tied to that restore preview and must be saved before replacement.

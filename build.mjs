@@ -21,6 +21,7 @@ for (const [dependency, license, destination] of [
   const source = new URL(`../${license}`, pathToFileURL(require.resolve(dependency)))
   await copyFile(source, `dist/${destination}`)
 }
+await copyFile('licenses/lucide-LICENSE.txt', 'dist/lucide-LICENSE.txt')
 
 const runtimePackages = new Map()
 const contributingInputs = new Set(Object.values(result.metafile.outputs).flatMap(output =>

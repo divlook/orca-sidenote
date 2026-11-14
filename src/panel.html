@@ -24,9 +24,17 @@
       <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true" focusable="false"><path d="m8 2-.5 2-2 .9-1.9-.5-2 3.2L3 9v2l-1.4 1.4 2 3.2 1.9-.5 2 .9.5 2h4l.5-2 2-.9 1.9.5 2-3.2L17 11V9l1.4-1.4-2-3.2-1.9.5-2-.9L12 2Z"/><circle cx="10" cy="10" r="3"/></svg>
     </button>
   </header>
+  <div id="note-filter">
+    <button id="filter-open" class="settings-select-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="filter-menu" disabled>Filter: <span id="filter-summary">All</span></button>
+    <button id="filter-clear" type="button" disabled>Clear</button>
+    <span id="filter-count" aria-live="polite"></span>
+    <button id="filter-retry" type="button" hidden>Retry filter</button>
+    <div id="filter-menu" class="settings-select-menu" hidden></div>
+  </div>
   <div id="problem" role="alert" hidden></div>
   <button id="retry" type="button" hidden>Retry save</button>
   <main id="note-panel" aria-label="Notes" aria-busy="true">
+    <div id="filtered-empty" hidden>No notes match this filter. <button id="filtered-empty-clear" type="button">Clear filter</button></div>
     <div id="note-list"></div>
     <button id="add-note-bottom" class="add-note" type="button" disabled>+ Add note</button>
   </main>
@@ -43,9 +51,10 @@
     </div>
   </dialog>
   <dialog id="note-settings" aria-labelledby="settings-title" aria-describedby="settings-description">
+    <header class="help-heading"><h2 id="settings-title">Note Settings</h2><button id="settings-close" class="icon-button" type="button" aria-label="Close note settings" title="Close">×</button></header>
+    <div id="settings-body">
     <form id="settings-form">
-      <header class="help-heading"><h2 id="settings-title">Note Settings</h2><button id="settings-close" class="icon-button" type="button" aria-label="Close note settings" title="Close">×</button></header>
-      <p id="settings-description">Changes apply and save automatically.</p>
+      <p id="settings-description">Preferences save automatically. Label name and color edits require Save changes.</p>
       <section class="setting-row" aria-labelledby="confirmation-title">
         <div class="setting-copy">
           <h3 id="confirmation-title"><label for="confirm-note-deletion">Confirm before deleting a note</label></h3>
@@ -65,17 +74,31 @@
           <h3 id="default-mode-title"><label for="default-note-mode">Default note mode</label></h3>
           <p id="default-mode-description">Reading returns a note to reading mode when focus leaves. New notes start in editing mode.</p>
         </div>
-        <div class="setting-control"><select id="default-note-mode" aria-describedby="default-mode-description"><option value="editing">Editing</option><option value="reading">Reading</option></select></div>
+        <div class="setting-control"><button id="default-note-mode" type="button" aria-describedby="default-mode-description"></button></div>
       </section>
       <section class="setting-row" aria-labelledby="web-links-title">
         <div class="setting-copy">
           <h3 id="web-links-title"><label for="web-link-opening">Open web links in</label></h3>
           <p id="web-links-description">Applies to HTTP and HTTPS links. Email links use your default application. Local file links open in the worktree’s Orca editor; remote file links are not supported.</p>
         </div>
-        <div class="setting-control"><select id="web-link-opening" aria-describedby="web-links-description"><option value="external">Default browser</option><option value="orca">Orca browser</option><option value="ask">Ask every time</option></select></div>
+        <div class="setting-control"><button id="web-link-opening" type="button" aria-describedby="web-links-description"></button></div>
       </section>
       <p id="settings-error" role="alert" hidden></p>
     </form>
+    <section class="labels-section" aria-labelledby="labels-title">
+      <h3 id="labels-title">Labels</h3>
+      <p>Labels are shared across all projects and worktrees in this store. Edit a name or color, then select Save changes for that label. Other preferences save automatically.</p>
+      <p id="labels-error" role="alert" hidden></p>
+      <button id="labels-retry" type="button" hidden>Retry labels</button>
+      <div id="labels-list"></div>
+      <div class="label-add">
+        <label for="label-name">New label</label>
+        <input id="label-name" type="text" autocomplete="off">
+        <button id="label-color" type="button" aria-label="Color for new label"></button>
+        <button id="label-add" type="button">Add label</button>
+      </div>
+      <button id="labels-reset" type="button">Reset labels…</button>
+    </section>
     <section class="data-section" aria-labelledby="data-title">
       <h3 id="data-title">Data</h3>
       <p>Back up or restore notes in this plugin store. Settings and undo history are not transferred.</p>
@@ -85,6 +108,18 @@
       <p>Remove notes from every project and worktree in this plugin store. Settings are kept.</p>
       <button id="delete-notes-open" type="button" aria-haspopup="dialog" aria-controls="delete-notes">Delete all notes…</button>
     </section>
+    </div>
+    <footer class="settings-footer"><button id="settings-close-footer" type="button">Close</button></footer>
+  </dialog>
+  <dialog id="label-confirm" aria-labelledby="label-confirm-title" aria-describedby="label-confirm-description">
+    <h2 id="label-confirm-title">Delete label?</h2>
+    <p id="label-confirm-description"></p>
+    <label><input id="label-confirm-ack" type="checkbox"> I saved or copied unsaved changes in other Note panels and closed them.</label>
+    <p id="label-confirm-error" role="alert" hidden></p>
+    <div class="settings-actions">
+      <button id="label-confirm-cancel" type="button">Cancel</button>
+      <button id="label-confirm-action" type="button">Delete label</button>
+    </div>
   </dialog>
   <dialog id="delete-note" aria-labelledby="delete-note-title" aria-describedby="delete-note-description">
     <h2 id="delete-note-title">Delete this note?</h2>

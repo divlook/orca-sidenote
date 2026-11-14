@@ -4,12 +4,12 @@ The package stays `private: true`. Orca distributes this plugin through Git, not
 
 ## Prepare a distribution
 
-1. Complete the relevant [verification](VERIFICATION.md). Record what ran.
+1. Complete [Documentation maintenance](DOCUMENTATION.md) for the release and the relevant [verification](VERIFICATION.md). Record what ran.
 2. Review the manifest version, Orca compatibility, and permissions. Use `/Applications/Orca.app/Contents/Resources/bin/orca plugin inspect . --json` to inspect contributions and access.
 3. Run `npm ci` and `npm run build`. Include runtime source, the complete generated `dist/`, project LICENSE, and [third-party notices](NOTICES.md) in the same distribution commit.
 4. Check for private notes, paths, screenshots, and local settings. Exclude `node_modules/` and `.orca/`.
 
-Do not distribute `dist/` alone. The manifest points to `src/worker.mjs` and `src/panel.html`. The worker imports `src/worktree/focus.ts`. The HTML uses source CSS and built assets.
+Do not distribute `dist/` alone. The manifest points to `src/worker.mjs` and `src/panel.html`. The worker imports modules from `src/worktree/` and their dependencies. The HTML uses source CSS and built assets.
 
 Orca installs files from an exact Git commit or tag without running npm or the build. `/Applications/Orca.app/Contents/Resources/bin/orca plugin release-entry . --json` uses committed HEAD, not uncommitted files. Building does not commit them. There is no separate release-asset packaging pipeline.
 
@@ -31,6 +31,6 @@ For offline preparation, `npm run version:plugin` runs Changesets and synchroniz
 
 ## Community listing
 
-The [community listing](https://www.onorca.dev/plugins/add) requires a public GitHub repository with the `orca-plugin` topic and a newly pushed `v<version>` tag for the complete distribution commit. A GitHub Release does not replace the tag or topic. Check `https://www.onorca.dev/plugins/<owner>/<repo>` for status and required fixes.
+The [community listing](https://orca.dev/plugins/add) requires a public GitHub repository with a valid format-2 manifest, a license, the `orca-plugin` topic, and a `vX.Y.Z` tag for the complete distribution commit. Follow the current listing page for publisher and safety requirements. A GitHub Release does not replace the tag or topic. Check `https://orca.dev/plugins/<owner>/<repo>` for status and required fixes.
 
-Orca checks for new tags every 30 minutes. Listing has no guaranteed deadline, and size can require maintainer review. Pushing source without a new version tag does not update the listing. MIT licensing does not change Orca approval or marketplace registration.
+The directory usually lists eligible releases within an hour, but listing has no guaranteed deadline. Pushing source without a new version tag does not update the listing. MIT licensing does not replace Orca access approval or the listing requirements.

@@ -2,18 +2,19 @@
 
 Keep Markdown notes beside each Orca project or worktree. SideNote follows the focused location and saves edits automatically.
 
-![SideNote displaying two reading-mode notes and a minimized note](docs/images/cover.png)
+![SideNote with labeled reading-mode notes, a minimized card, and the label filter](docs/images/cover.png)
 
 *The compiled SideNote panel with demo data, captured in an isolated browser host with in-memory storage.*
 
-## In this checkout
+## Keep each project's notes together
 
-- Keep an ordered collection of note cards for each exact host and folder path, including worktrees.
-- Add, reorder, minimize, and individually delete notes with optional deletion confirmation.
-- Mix editing and reading cards, with find and replace, line numbers, per-note undo, task toggles, and plain-text code blocks.
-- Back up and restore notes with a JSON file.
+- Keep a separate, ordered note collection for each host and folder path. Switching worktrees brings back that location's notes.
+- Mix editing and reading cards. Minimize notes you want to keep nearby, and reorder cards as your work changes.
+- Edit Markdown with find and replace, line numbers, and per-note undo. Toggle task checkboxes in reading mode.
+- Organize notes with shared, customizable labels and filter each location's collection by label.
+- Back up and restore note collections with a JSON file.
 
-Preview does not render diagrams or load images. See [Usage](docs/USAGE.md) for editing and [Data](docs/DATA.md) for backup and restore.
+Reading mode displays code blocks as plain text. It does not render diagrams or load images. See [Usage](docs/USAGE.md) for editing and links, [Labels](docs/LABELS.md) for classification, and [Filtering](docs/FILTERING.md) for choosing which notes to display.
 
 ## Try a local checkout
 

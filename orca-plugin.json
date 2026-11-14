@@ -6,23 +6,23 @@
   "description": "A sidebar panel that automatically saves Markdown notes for each project and worktree",
   "cover": {
     "path": "docs/images/cover.png",
-    "alt": "SideNote displaying two reading-mode notes and a minimized note"
+    "alt": "SideNote with labeled reading-mode notes, a minimized card, and the label filter"
   },
   "screenshots": [
     {
       "path": "docs/images/sidenote-overview.png",
-      "alt": "A checklist and next steps in reading mode with a minimized implementation note between them",
-      "caption": "Read a checklist and next steps with another note minimized."
+      "alt": "A labeled review checklist and next-session note in reading mode, with an implementation note minimized between them",
+      "caption": "Keep a checklist and next steps visible with labeled note cards."
     },
     {
       "path": "docs/images/sidenote-source.png",
-      "alt": "A Markdown note open for editing below a reading-mode checklist and above a minimized note",
-      "caption": "Edit Markdown alongside a reading-mode note."
+      "alt": "Markdown editing with line numbers below a reading-mode checklist and above a minimized next-session note",
+      "caption": "Edit Markdown while keeping the review checklist in view."
     },
     {
       "path": "docs/images/sidenote-organize.png",
-      "alt": "Two minimized notes above an expanded note with next steps",
-      "caption": "Minimize notes and keep the next steps open."
+      "alt": "The in review label filter displaying two of three notes, with the review checklist minimized",
+      "caption": "Filter by label to focus on the notes needed for a review."
     }
   ],
   "engines": { "orca": ">=1.4.248" },

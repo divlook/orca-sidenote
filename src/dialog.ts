@@ -1,4 +1,4 @@
-type DialogPolicy = { canClose: () => boolean; returnFocus: () => HTMLElement | null | undefined }
+type DialogPolicy = { canClose: () => boolean; returnFocus: () => HTMLElement | null | undefined; consumeEscape?: () => boolean }
 
 export function bindDialogControls(dialog: HTMLDialogElement, close: HTMLButtonElement, policy: DialogPolicy): () => void {
   const closeDialog = () => { if (policy.canClose()) dialog.close() }
@@ -16,7 +16,8 @@ export function bindDialogControls(dialog: HTMLDialogElement, close: HTMLButtonE
   // Consume Escape before the editor or host can change panel state.
   const escape = (event: KeyboardEvent) => {
     if (!dialog.open || event.key !== 'Escape' || [...document.querySelectorAll('dialog[open]')].at(-1) !== dialog) return
-    event.preventDefault(); event.stopImmediatePropagation(); closeDialog()
+    event.preventDefault(); event.stopImmediatePropagation()
+    if (!policy.consumeEscape?.()) closeDialog()
   }
   close.addEventListener('click', closeDialog)
   dialog.addEventListener('close', restoreFocus)
@@ -32,7 +33,7 @@ export function bindDialogControls(dialog: HTMLDialogElement, close: HTMLButtonE
   }
 }
 
-export function bindDialog(dialog: HTMLDialogElement, opener: HTMLButtonElement, close: HTMLButtonElement, canClose = () => true): void {
+export function bindDialog(dialog: HTMLDialogElement, opener: HTMLButtonElement, close: HTMLButtonElement, canClose = () => true, consumeEscape?: () => boolean): void {
   opener.addEventListener('click', () => dialog.showModal())
-  bindDialogControls(dialog, close, { canClose, returnFocus: () => opener })
+  bindDialogControls(dialog, close, { canClose, returnFocus: () => opener, consumeEscape })
 }

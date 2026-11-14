@@ -1,6 +1,7 @@
 import type { JsonValue } from 'orca'
 import { NOTE_KEY_PREFIX, noteKey, parseNoteKey, type NoteTarget } from '../protocol'
 import { collection, editorKey, readCollection, readStoredCollection, sameCollection, type NoteCollection } from './note-collection'
+import { DEFAULT_LABELS, LABEL_KEY, labelCatalog, readLabels, type NoteLabel, type LabelColor } from './note-labels'
 
 export type NoteStore = { get(key: string): Promise<unknown>; set(key: string, value: JsonValue): Promise<void>;
   keys(): Promise<string[]>; delete(key: string): Promise<void> }
@@ -13,6 +14,8 @@ export interface NoteOperation {
   refreshCleanDrafts(states: ReadonlyMap<string, NoteCollection | null>): void
   reconcile(): Promise<void>
   write(key: string, value: NoteCollection): Promise<void>
+  labels(): Promise<readonly NoteLabel[]>
+  writeLabels(labels: readonly NoteLabel[]): Promise<void>
   finish(): Promise<void>
 }
 type ScopeDraft = { value: NoteCollection; saved: NoteCollection; pending: number; error: string; revision: number; removed: Set<string> }
@@ -34,6 +37,146 @@ export class NoteSession {
   private resolveTarget: (() => Promise<NoteTarget | null>) | undefined
   private operation: { pending: number } | null = null
   private deletionOperation: NoteOperation | null = null
+  private catalog: readonly NoteLabel[] = []
+  private catalogReady = false
+  private catalogBusy = false
+  private catalogError = ''
+  private labelDeletion: { id: string | null; operation: NoteOperation; states: Map<string, NoteCollection | null>; labels: readonly NoteLabel[] } | null = null
+
+  get labels() { return { ready: this.catalogReady && !this.catalogBusy && !this.operation, labels: this.catalog, busy: this.catalogBusy, error: this.catalogError } }
+
+  async loadLabels(): Promise<void> {
+    if (this.catalogBusy) return
+    if (this.operation) throw new Error('Another note operation is already open.')
+    this.catalogBusy = true; this.changed()
+    try { this.catalog = readLabels(await this.store.get(LABEL_KEY)); this.catalogReady = true; this.catalogError = '' }
+    catch (error) { this.catalogReady = false; this.catalogError = error instanceof Error ? error.message : String(error); throw error }
+    finally { this.catalogBusy = false; this.changed() }
+  }
+
+  private async persistLabels(labels: readonly NoteLabel[]): Promise<void> {
+    const next = labelCatalog(labels)
+    try { await this.store.set(LABEL_KEY, { version: 1, labels: next } as unknown as JsonValue) }
+    catch (error) {
+      this.catalogReady = false
+      this.catalogError = error instanceof Error ? error.message : String(error)
+      this.changed()
+      throw error
+    }
+    this.catalog = next; this.catalogReady = true; this.catalogError = ''; this.changed()
+  }
+
+  private async editLabels(edit: (labels: readonly NoteLabel[]) => readonly NoteLabel[]): Promise<void> {
+    if (!this.labels.ready) throw new Error('Wait for the label catalog to be ready.')
+    this.catalogBusy = true; this.changed()
+    try { await this.persistLabels(edit(readLabels(await this.store.get(LABEL_KEY)))) }
+    catch (error) { this.catalogReady = false; this.catalogError = error instanceof Error ? error.message : String(error); throw error }
+    finally { this.catalogBusy = false; this.changed() }
+  }
+
+  addLabel(name: string, color: LabelColor): Promise<void> {
+    return this.editLabels(labels => [...labels, { id: crypto.randomUUID(), name: name.trim(), color }])
+  }
+  updateLabel(id: string, name: string, color: LabelColor): Promise<void> {
+    return this.editLabels(labels => {
+      if (!labels.some(label => label.id === id)) throw new Error('The label no longer exists.')
+      return labels.map(label => label.id === id ? { id, name: name.trim(), color } : label)
+    })
+  }
+  reorderLabels(ids: readonly string[]): Promise<void> {
+    return this.editLabels(labels => {
+      if (ids.length !== labels.length || new Set(ids).size !== ids.length || ids.some(id => !labels.some(label => label.id === id))) throw new Error('The label order changed.')
+      return ids.map(id => labels.find(label => label.id === id)!)
+    })
+  }
+  async assignLabel(expectedKey: string, labelId: string | null): Promise<void> {
+    if (!this.ready || !this.labels.ready) return
+    const key = this.scopeKey, draft = this.scopeDrafts.get(key)!, generation = this.generation
+    if (!draft.value.notes.some(note => editorKey(key, note.id) === expectedKey)) return
+    if (labelId !== null && !this.catalog.some(label => label.id === labelId)) throw new Error('The label no longer exists.')
+    // Persist defaults before the first assignment so a failed catalog write cannot create dangling references.
+    this.catalogBusy = true; this.changed()
+    try {
+      const current = readLabels(await this.store.get(LABEL_KEY))
+      if (labelId !== null && !current.some(label => label.id === labelId)) throw new Error('The label no longer exists.')
+      await this.persistLabels(current)
+      if (!this.ready || generation !== this.generation || this.scopeKey !== key || this.scopeDrafts.get(key) !== draft) return
+      draft.value = collection(draft.value.notes.map(note => {
+        if (editorKey(key, note.id) !== expectedKey) return note
+        const { labelId: previous, ...rest } = note
+        return labelId === null ? rest : { ...rest, labelId }
+      }))
+      await this.enqueue(key, draft)
+    } catch (error) {
+      this.catalogReady = false
+      this.catalogError = error instanceof Error ? error.message : String(error)
+      throw error
+    } finally { this.catalogBusy = false; this.changed() }
+  }
+
+  async prepareLabelDeletion(id: string | null): Promise<number> {
+    if (this.labelDeletion || this.catalogBusy) throw new Error('Another label operation is open.')
+    const operation = await this.acquireNoteOperation()
+    try {
+      const labels = await operation.labels()
+      if (id !== null && !labels.some(label => label.id === id)) throw new Error('The label no longer exists.')
+      const keys = new Set((await operation.keys()).filter(key => key.startsWith(NOTE_KEY_PREFIX)))
+      for (const key of this.scopeDrafts.keys()) keys.add(key)
+      const states = new Map<string, NoteCollection | null>()
+      let count = 0
+      for (const key of keys) {
+        const stored = await operation.read(key)
+        states.set(key, stored)
+        const ids = new Set([...(stored?.notes ?? []), ...(this.scopeDrafts.get(key)?.value.notes ?? [])]
+          .filter(note => note.labelId !== undefined && (id === null || note.labelId === id)).map(note => note.id))
+        count += ids.size
+      }
+      this.labelDeletion = { id, operation, states, labels }
+      return count
+    } catch (error) { await operation.finish(); throw error }
+  }
+
+  async deletePreparedLabels(): Promise<void> {
+    const prepared = this.labelDeletion
+    if (!prepared || this.catalogBusy) throw new Error('Prepare label deletion first.')
+    this.catalogBusy = true; this.changed()
+    const clear = (value: NoteCollection) => collection(value.notes.map(note => {
+      if (note.labelId === undefined || (prepared.id !== null && note.labelId !== prepared.id)) return note
+      const { labelId, ...rest } = note
+      return rest
+    }))
+    try {
+      if (JSON.stringify(await prepared.operation.labels()) !== JSON.stringify(prepared.labels)) throw new Error('The label catalog changed. Cancel and prepare again.')
+      for (const [key, before] of prepared.states) {
+        const current = await prepared.operation.read(key)
+        if (current === null ? before !== null : before === null || !sameCollection(current, before)) throw new Error('Stored notes changed. Cancel and prepare again.')
+      }
+      for (const [key, before] of prepared.states) {
+        if (before) {
+          const next = clear(before)
+          if (!sameCollection(before, next)) {
+            await this.store.set(key, next as unknown as JsonValue)
+            prepared.states.set(key, next)
+          }
+        }
+        const draft = this.scopeDrafts.get(key)
+        if (draft) { draft.value = clear(draft.value); draft.saved = clear(draft.saved) }
+      }
+      const next = prepared.id === null
+        ? DEFAULT_LABELS.map(label => ({ ...label, id: crypto.randomUUID() }))
+        : prepared.labels.filter(label => label.id !== prepared.id)
+      await this.persistLabels(next)
+      prepared.labels = next
+    } catch (error) { this.catalogError = error instanceof Error ? error.message : String(error); throw error }
+    finally { this.catalogBusy = false; this.changed() }
+  }
+
+  async finishLabelDeletion(): Promise<void> {
+    if (this.catalogBusy) throw new Error('Wait for the label operation to finish.')
+    const prepared = this.labelDeletion
+    this.labelDeletion = null
+    if (prepared) await prepared.operation.finish()
+  }
 
   constructor(private store: NoteStore, private changed: () => void) {}
   private get ready(): boolean {
@@ -152,7 +295,7 @@ export class NoteSession {
     if (!draft || !this.ready) return Promise.resolve()
     const note = draft.value.notes.find(note => editorKey(this.scopeKey, note.id) === expectedKey)
     if (!note) return Promise.resolve()
-    draft.value = collection(draft.value.notes.map(item => item.id === note.id ? { id: item.id, text } : item))
+    draft.value = collection(draft.value.notes.map(item => item.id === note.id ? { ...item, text } : item))
     return this.enqueue(this.scopeKey, draft)
   }
 
@@ -303,6 +446,7 @@ export class NoteSession {
 
   async acquireNoteOperation(): Promise<NoteOperation> {
     if (this.operation) throw new Error('Another note operation is already open.')
+    if (this.catalogBusy) throw new Error('Wait for the label catalog operation to finish.')
     const operation = { pending: 0 }
     this.operation = operation
     ++this.generation
@@ -321,6 +465,8 @@ export class NoteSession {
       get: key => run(() => this.store.get(key)),
       read: key => run(() => readStoredCollection(this.store, key)),
       keys: () => run(() => this.store.keys()),
+      labels: () => run(async () => readLabels(await this.store.get(LABEL_KEY))),
+      writeLabels: labels => run(() => this.persistLabels(labels)),
       recoveryCollections: () => { assertLive(); return this.recoveryCollections() },
       refreshCleanDrafts: states => {
         assertLive()

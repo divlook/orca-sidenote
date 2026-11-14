@@ -2,6 +2,7 @@ import { NOTE_KEY_PREFIX, parseNoteKey } from '../protocol'
 import { ARCHIVE_BYTES, ARCHIVE_RECORDS, archive, encodeArchive, planRestore, validateArchive, type NoteArchive, type RestoreChoice, type RestorePlan } from './note-archive'
 import type { NoteSession, NoteOperation } from '../notes/session'
 import { collection, sameCollection, type NoteCollection } from '../notes/note-collection'
+import { LABEL_KEY } from '../notes/note-labels'
 
 const HOST_KEY_CHARACTERS = 256
 const HOST_KEYS = 1024
@@ -48,6 +49,14 @@ export class NotesTransfer {
     let bytes = encoder.encode(JSON.stringify(contents, null, 2)).byteLength
     let count = keys.length
     if (bytes > HOST_STORE_BYTES) throw new Error('The plugin store exceeds the host 5 MiB limit.')
+    if (JSON.stringify(plan.labels) !== JSON.stringify(plan.beforeLabels)) {
+      const catalog = { version: 1, labels: plan.labels }
+      if (encoder.encode(JSON.stringify(catalog)).byteLength > HOST_VALUE_BYTES) throw new Error('The restored label catalog exceeds the host stored-value limit.')
+      const singleton = encoder.encode(JSON.stringify({ [LABEL_KEY]: catalog }, null, 2)).byteLength
+      if (Object.hasOwn(contents, LABEL_KEY)) bytes += singleton - encoder.encode(JSON.stringify({ [LABEL_KEY]: contents[LABEL_KEY] }, null, 2)).byteLength
+      else { bytes += singleton - 2; ++count }
+      if (count > HOST_KEYS || bytes > HOST_STORE_BYTES) throw new Error('Restore exceeds the host plugin-store limit. Nothing was written.')
+    }
     for (const item of plan.items) {
       if (item.action !== 'create' && item.action !== 'replace') continue
       const value = collection(item.note.notes)
@@ -84,7 +93,7 @@ export class NotesTransfer {
         if (size > ARCHIVE_BYTES) throw new Error('Backup exceeds the archive resource limit. Nothing was truncated.')
         notes.push({ ...target, notes: value.notes })
       }
-      const value = archive(notes, this.lease().recoveryCollections())
+      const value = archive(notes, this.lease().recoveryCollections(), await this.lease().labels())
       encodeArchive(value)
       return value
     } finally { this.transferBusy = false }
@@ -104,7 +113,7 @@ export class NotesTransfer {
         states.set(choice.key, stored)
       }
       this.lease().refreshCleanDrafts(states)
-      const plan = planRestore(snapshot, choices, states, this.lease().recoveryCollections())
+      const plan = planRestore(snapshot, choices, states, this.lease().recoveryCollections(), await this.lease().labels())
       await this.preflightStorage(plan)
       this.restore = plan
       return plan
@@ -131,11 +140,23 @@ export class NotesTransfer {
     let error = ''
     try {
       await this.preflightStorage(plan)
+      if (JSON.stringify(await this.lease().labels()) !== JSON.stringify(plan.beforeLabels)) {
+        this.restore = this.protectedPlan = null
+        throw new Error('Destination labels changed. Prepare a new preview and protection file.')
+      }
       for (const item of plan.items) {
         const current = await this.stored(item.key)
         if (current === null ? item.before !== null : item.before === null || !sameCollection(current, item.before)) {
           this.restore = this.protectedPlan = null
           throw new Error('Destination notes changed. Prepare a new preview and protection file.')
+        }
+      }
+      // Write the catalog first: an unknown outcome can add unused labels, never dangling assignments.
+      if (JSON.stringify(plan.labels) !== JSON.stringify(plan.beforeLabels)) {
+        try { await this.lease().writeLabels(plan.labels) }
+        catch (reason) {
+          this.restore = this.protectedPlan = null
+          throw new Error(`Label catalog write failed; its outcome may be unknown. Preview again before retrying. ${reason instanceof Error ? reason.message : String(reason)}`)
         }
       }
       for (const item of selected) {

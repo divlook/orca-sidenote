@@ -2,9 +2,15 @@
 
 Each exact host and worktree path has an ordered collection of notes in Orca's plugin-owned storage, separate from project files and Git. There is no automatic remote backup or synchronization. Separate Orca servers have separate stores.
 
-Removing a project or worktree does not delete its note. Reusing the same host and path reads it again. Folder moves and host changes have no automatic migration. Retention after plugin removal or app-data reset is not guaranteed.
+Removing a project or worktree does not delete its note collection. Reusing the same host and path reads the collection again. Folder moves and host changes have no automatic migration. Retention after plugin removal or app-data reset is not guaranteed.
 
-A failed draft may exist only in panel memory. Copy it before closing or reloading the panel. Do not edit or delete user storage keys or files for testing or recovery. Plan a migration before changing storage formats. Test it with isolated data.
+A recovery collection may exist only in panel memory. Back it up or copy its content before closing or reloading the panel. Do not edit or delete user storage keys or files for testing or recovery. Plan a migration before changing storage formats. Test it with isolated data.
+
+## Label notes
+
+Each note can have one label or none. Select **+ Label** or the current label on a card to assign, replace, or clear it, including on minimized cards. Labels do not change note order or enforce a workflow.
+
+Under **Note Settings → Labels**, add, rename, recolor, reorder, or delete labels. The catalog is shared across projects and worktrees in this store. Deleting a label clears its assignments; resetting labels clears all assignments and replaces the catalog with the four defaults. Both actions affect the whole store. Save or copy unsaved changes in other Note panels and close them before confirming. See [Catalog management](LABELS.md#catalog-management) for confirmation and partial-failure behavior.
 
 ## Back up notes
 
@@ -16,7 +22,7 @@ Other Note panels cannot be detected or locked. Before a transfer, save or copy 
 2. Check the acknowledgement. Select **Start transfer**. Editing pauses in this panel until you close the dialog.
 3. Select **Prepare backup**. Select **Save backup file**.
 
-The backup includes all stored collections, with note IDs and order, and separate recovery collections from this panel. Recovery collections include failed edits, new blank notes, empty clears, and unsaved ordering changes. The backup excludes settings, undo history, and unsaved drafts held only in other panels. Backup is available even when the active location, editor, or settings are not ready.
+The backup includes the complete ordered label catalog, all stored collections with note IDs, label assignments and order, and separate recovery collections from this panel. Recovery collections include failed edits, new blank notes, empty clears, and unsaved ordering changes. The backup excludes settings, label filters, undo history, and unsaved drafts held only in other panels. Backup is available even when the active location, editor, or settings are not ready.
 
 ## Restore notes
 
@@ -25,13 +31,17 @@ Restore preserves exact host and path identities. Paths in the file are not file
 Before starting, save or copy unsaved content in other Note panels and close them. The host provides no cross-panel storage lock. Start transfer as described under [Back up notes](#back-up-notes).
 
 1. Select a SideNote UTF-8 JSON backup. Choose a collection for each host/path identity. If stored notes and a recovery collection share an identity, choose one explicitly.
-2. Select **Preview selected restore**. Different destination collections and affected unsaved drafts remain unchanged unless you select replacement. Replacement applies to the whole selected collection, including note IDs and order. Collections absent from the backup are not deleted.
+2. Select **Preview selected restore**. Different destination collections and affected unsaved drafts remain unchanged unless you select replacement. Replacement applies to the whole selected collection, including note IDs, label assignments, and order. Collections absent from the backup are not deleted.
 3. For replacements, select **Save protection file**. The file contains affected stored originals and this panel's recovery drafts. Confirm replacement only after saving it. Protection and confirmation apply only to this preview. If choices or destination data change, prepare a new preview. Save protection again before replacing notes. Canceling the protection save blocks replacement and changes no notes.
 4. Select **Restore selected notes**.
 
-A changed note gets new undo history. An unchanged note keeps its history. Preview also refreshes selected clean notes whose saved text changed since this panel loaded them, including identical skips. Unsaved and failed drafts remain. A refreshed note loses undo history only when its cached text changes.
+A restored note keeps its undo history only if its ID and text remain unchanged. Label-only changes preserve history. Preview also refreshes selected clean notes whose saved text changed since this panel loaded them, including identical skips. Unsaved and failed drafts remain unless you explicitly replace them. A refreshed note loses undo history only when its cached text changes.
+
+Restore imports only labels needed by collections that it creates or replaces. It reuses a destination label with the same trimmed name and color, ignoring English letter case. A same-name color conflict gets an available numeric suffix. New labels append in backup order. Existing labels and unselected notes remain unchanged. Older backups without labels restore notes without assignments and leave the destination catalog in place. The protection file includes the destination catalog. Label writes precede note writes; a failed restore can leave unused imported labels.
 
 Restore stops on the first failed request. Its outcome may be unknown. Earlier writes are not rolled back. Preview again before retrying. Text is never truncated to a plugin character limit; Orca's storage quotas still apply.
+
+**Stop after in-flight note** stops before the next collection write. It does not cancel an in-flight request or roll back earlier writes.
 
 ## Delete all notes
 
@@ -39,7 +49,7 @@ Deletion cannot be undone. Copy important notes elsewhere before confirming. Clo
 
 Under **Note Settings**, select **Delete all notes…**. The count covers notes or empty saved locations across all projects, worktrees, and hosts in this store, including removed targets and this panel's drafts. Each empty or unreadable saved location counts as one cleanup entry. Pending writes finish before counting. Editing and focus loads remain suspended through confirmation.
 
-Confirmation removes all `note:v1:` keys and discards this panel's drafts and undo history. Settings remain. Cancel before confirmation to preserve notes. Storage has no atomic bulk delete. A failure may leave some notes deleted and others available for retry. Closing after partial failure does not restore deleted notes.
+Confirmation removes all `note:v1:` keys and discards this panel's drafts and undo history. Settings, label filters, and the label catalog remain. Cancel before confirmation to preserve notes. Storage has no atomic bulk delete. A failure may leave some notes deleted and others available for retry. Closing after partial failure does not restore deleted notes.
 
 Deleting one card is an ordered, target-only transaction: it waits for earlier writes and saves its collection without that note, without a global lease or refocusing the panel. The card and its draft are removed only after a successful write. During that draft's lifetime, later queued snapshots also omit the deleted ID so they cannot restore it. An explicit lease replacement creates a new draft and can restore the same ID. A failed request may have an unknown outcome; the panel rereads clean data without discarding unsaved drafts. A successful deletion clears only that card's editor history; it does not change other notes or preferences. Bulk deletion and transfer remain exclusive operations and drain pending single-card deletions.
 
@@ -47,9 +57,11 @@ Deleting one card is an ordered, target-only transaction: it waits for earlier w
 
 [protocol.ts](../src/protocol.ts) defines a key as `note:v1:` + `JSON.stringify([hostId, path])`. A `null` host and a string host are distinct. Normalizing paths or merging host values can change identities.
 
-Values are version 2 objects: `{ version: 2, notes: [{ id, text }] }`. Array order is display order. IDs are nonempty and unique within a collection. New notes use random UUIDs and append as blank notes. Missing values mean an empty collection. Every legacy string, including empty strings, JSON-looking Markdown and text containing `---`, is read as exactly one note with the stable ID `legacy`. Reading never writes storage; the first mutation saves the collection object. Older plugin releases expect strings and cannot read version 2 envelopes. Keep a backup before downgrading; there is no automatic downgrade conversion.
+Label filters are separate scoped view preferences under `view:note-filter:v1:` + `JSON.stringify([hostId, path])`, with values `{ version: 1, labelIds: string[], noLabel: boolean }`. An absent preference shows all notes. Filtering does not change note or archive formats, and backups do not include these preferences.
 
-The archive format is `orca-sidenote-notes`, version 2. Each record has exact `hostId`, `path`, and an ordered `notes` array of `{ id, text }`. Both `notes` and `recoveryDrafts` contain collection records. Version 1 backups are accepted losslessly as one `legacy` note per record. Restoring a legacy record into an existing scope follows the same whole-collection conflict and replacement rules; it does not append to or split the destination notes. Import rejects invalid UTF-8, malformed JSON, unsupported formats, unknown fields, and duplicate identities or note IDs. It does not import raw Orca storage JSON. Archives are limited to 16 MiB and 10,000 combined note candidates (empty collections count as one). These are application resource bounds, not Orca quotas.
+Values are version 3 objects: `{ version: 3, notes: [{ id, text, labelId? }] }`. The optional label ID refers to the catalog at `labels:v1`, stored as `{ version: 1, labels }` in catalog order. Array order is manual collection order. IDs are nonempty and unique within a collection. New notes use random UUIDs and append as blank notes. Missing values mean an empty collection. Version 2 collections are read without assignments. Every legacy string, including empty strings, JSON-looking Markdown and text containing `---`, is read as exactly one note with the stable ID `legacy`. Reading never writes storage; the first mutation saves the collection object. Older plugin releases cannot read version 3 collections. Keep a backup before downgrading; there is no automatic downgrade conversion.
+
+The archive format is `orca-sidenote-notes`, version 3, with the ordered label catalog and optional note label assignments. Each record has exact `hostId`, `path`, and an ordered `notes` array. Both `notes` and `recoveryDrafts` contain collection records. Version 2 backups are accepted without assignments; version 1 backups are accepted losslessly as one `legacy` note per record. Restoring a legacy record follows the same whole-collection conflict and replacement rules. It does not append to or split the destination notes. Import rejects invalid UTF-8, malformed JSON, unsupported formats, unknown fields, duplicate identities within either list, and duplicate note IDs within a collection. The same scope can appear once in each list as separate stored and recovery candidates. Import does not accept raw Orca storage JSON. Archives are limited to 16 MiB and 10,000 combined note candidates (empty collections count as one). These are application resource bounds, not Orca quotas.
 
 In the inspected Orca host, storage keys contain 1–256 characters excluding reserved names. Each JSON-serialized value is at most 256 KiB. The namespace holds at most 1,024 keys and 5 MiB of pretty-printed JSON. Settings share this namespace and count toward its limits. Actual writes can still fail.
 
@@ -60,3 +72,5 @@ Source line-number visibility is stored separately as a boolean under `settings:
 Single-note deletion confirmation is stored separately as a boolean under `settings:confirm-note-deletion`. It defaults to On when absent and applies to future per-card trash actions. Changing this setting deletes nothing and does not disable the separate confirmation for deleting all notes.
 
 Default note mode is stored separately under `settings:default-note-mode` as `editing` or `reading`. It defaults to `editing` when absent. Existing setting values are preserved.
+
+Web-link opening is stored separately under `settings:web-link-opening` as `external`, `orca`, or `ask`. It defaults to `external` when absent.

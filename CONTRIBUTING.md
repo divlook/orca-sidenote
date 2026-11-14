@@ -6,11 +6,11 @@ Use [Development](docs/DEVELOPMENT.md) to set up a checkout. Use [Architecture](
 
 1. Describe the intended behavior. Read the relevant code and tests.
 2. Explain compatibility and migration before changing storage keys, identities, limits, permissions, or focus handling.
-3. Update related code, tests, and guidance. Preserve user files, notes, and settings.
+3. Update related code and tests. Before marking implementation complete, follow [Documentation maintenance](docs/DOCUMENTATION.md) for affected guidance. Preserve user files, notes, and settings.
 4. Regenerate built assets instead of editing them directly.
-5. Before marking implementation complete, ensure every user-visible change is covered by a new or updated Changeset, even when no commit or release is requested. Run `npm run changeset`, select `orca-sidenote` and the appropriate semantic-version bump, and write a short release note. When committing the change, include its `.changeset/*.md` entry. Documentation-only changes need no release entry.
+5. For every user-visible change, add or update a Changeset before marking implementation complete, even when no commit or release is requested. Run `npm run changeset`, select `orca-sidenote`, choose the appropriate semantic-version bump, and write a short release note. Include the `.changeset/*.md` entry when committing the change. Documentation-only changes need no release entry.
 
-Run `npm test` for the portable model, editor, and release tests. [Follow the verification guide](docs/VERIFICATION.md) for other checks and record your results. Review the generated version PR before merging it. See [Release](docs/RELEASE.md) for its contents and prerequisites; the release/version workflow generates `CHANGELOG.md`.
+Follow [Verification](docs/VERIFICATION.md) to choose checks and record results. `npm test` covers portable model, editor, and release tests. For documentation-only changes, check links and documented commands instead of running unrelated builds or behavior tests. Review generated version PRs as described in [Release](docs/RELEASE.md). The release/version workflow generates `CHANGELOG.md`.
 
 ## Submit a change
 

@@ -1,16 +1,17 @@
 import { noteKey, parseNoteKey } from '../protocol'
 import { collection, readCollection, sameCollection, type NoteCollection, type NoteRecord } from '../notes/note-collection'
+import { labelCatalog, mergeLabels, type NoteLabel } from '../notes/note-labels'
 
 // Archive limits are application resource bounds, not storage quotas.
 export const ARCHIVE_BYTES = 16 * 1024 * 1024
 export const ARCHIVE_RECORDS = 10000
 export type ArchiveNote = Readonly<{ hostId: string | null; path: string; notes: readonly NoteRecord[] }>
-export type NoteArchive = Readonly<{ format: 'orca-sidenote-notes'; version: 2;
+export type NoteArchive = Readonly<{ format: 'orca-sidenote-notes'; version: 3; labels: readonly NoteLabel[];
   notes: readonly ArchiveNote[]; recoveryDrafts: readonly ArchiveNote[] }>
 export type RestoreChoice = Readonly<{ key: string; source: 'notes' | 'recoveryDrafts'; replace: boolean }>
 export type RestoreItem = Readonly<{ key: string; note: ArchiveNote; before: NoteCollection | null;
   action: 'create' | 'identical' | 'conflict' | 'replace'; dirty: boolean }>
-export type RestorePlan = Readonly<{ items: readonly RestoreItem[]; protection: NoteArchive }>
+export type RestorePlan = Readonly<{ items: readonly RestoreItem[]; protection: NoteArchive; labels: readonly NoteLabel[]; beforeLabels: readonly NoteLabel[] }>
 
 function fields(value: unknown, names: string[]): asserts value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -18,15 +19,17 @@ function fields(value: unknown, names: string[]): asserts value is Record<string
     throw new Error('The backup has an invalid or unknown field.')
   }
 }
-export function archive(notes: readonly ArchiveNote[], recoveryDrafts: readonly ArchiveNote[]): NoteArchive {
-  return validateArchive({ format: 'orca-sidenote-notes', version: 2, notes, recoveryDrafts })
+export function archive(notes: readonly ArchiveNote[], recoveryDrafts: readonly ArchiveNote[], labels: readonly NoteLabel[] = []): NoteArchive {
+  return validateArchive({ format: 'orca-sidenote-notes', version: 3, labels, notes, recoveryDrafts })
 }
 export function validateArchive(value: unknown): NoteArchive {
-  fields(value, ['format', 'version', 'notes', 'recoveryDrafts'])
-  if (value.format !== 'orca-sidenote-notes' || (value.version !== 1 && value.version !== 2)) throw new Error('Unsupported notes backup format or version.')
+  const version = value && typeof value === 'object' && 'version' in value ? value.version : undefined
+  fields(value, version === 3 ? ['format', 'version', 'labels', 'notes', 'recoveryDrafts'] : ['format', 'version', 'notes', 'recoveryDrafts'])
+  if (value.format !== 'orca-sidenote-notes' || (version !== 1 && version !== 2 && version !== 3)) throw new Error('Unsupported notes backup format or version.')
+  const labels = version === 3 ? labelCatalog(value.labels) : []
+  const labelIds = new Set(labels.map(label => label.id))
   if (!Array.isArray(value.notes) || !Array.isArray(value.recoveryDrafts)
     || value.notes.length + value.recoveryDrafts.length > ARCHIVE_RECORDS) throw new Error('Backup exceeds the 10,000 candidate limit or has invalid lists.')
-  const version = value.version
   let count = 0
   const lists = [value.notes, value.recoveryDrafts].map(list => {
     const seen = new Set<string>()
@@ -36,8 +39,9 @@ export function validateArchive(value: unknown): NoteArchive {
         throw new Error('Invalid note identity. Note paths must be nonempty strings.')
       }
       if (version === 1 && typeof value.text !== 'string') throw new Error('Invalid legacy note text.')
-      if (version === 2 && !Array.isArray(value.notes)) throw new Error('Invalid note collection.')
+      if (version !== 1 && !Array.isArray(value.notes)) throw new Error('Invalid note collection.')
       const notes = version === 1 ? readCollection(value.text).notes : collection(value.notes as NoteRecord[]).notes
+      if (notes.some(note => note.labelId !== undefined && (version !== 3 || !labelIds.has(note.labelId)))) throw new Error('The backup references an unknown label.')
       count += Math.max(1, notes.length)
       if (count > ARCHIVE_RECORDS) throw new Error('Backup exceeds the 10,000 note candidate limit.')
       const note = Object.freeze({ hostId: value.hostId as string | null, path: value.path, notes })
@@ -47,7 +51,7 @@ export function validateArchive(value: unknown): NoteArchive {
       return note
     }))
   })
-  return Object.freeze({ format: 'orca-sidenote-notes', version: 2, notes: lists[0], recoveryDrafts: lists[1] })
+  return Object.freeze({ format: 'orca-sidenote-notes', version: 3, labels, notes: lists[0], recoveryDrafts: lists[1] })
 }
 export function encodeArchive(value: NoteArchive): Uint8Array {
   const bytes = new TextEncoder().encode(JSON.stringify(validateArchive(value), null, 2))
@@ -60,25 +64,36 @@ export function decodeArchive(bytes: Uint8Array): NoteArchive {
 }
 
 export function planRestore(value: NoteArchive, choices: readonly RestoreChoice[], states: ReadonlyMap<string, NoteCollection | null>,
-  drafts: readonly ArchiveNote[]): RestorePlan {
+  drafts: readonly ArchiveNote[], destinationLabels: readonly NoteLabel[] = []): RestorePlan {
   const seen = new Set<string>()
   const candidates = {
     notes: new Map(value.notes.map(note => [noteKey(note), note])),
     recoveryDrafts: new Map(value.recoveryDrafts.map(note => [noteKey(note), note]))
   }
   const dirtyKeys = new Set(drafts.map(noteKey))
+  const eligible = choices.filter(choice => choice.replace || (states.get(choice.key) === null && !dirtyKeys.has(choice.key)))
+  const used = new Set(eligible.flatMap(choice => candidates[choice.source]?.get(choice.key)?.notes.flatMap(note => note.labelId ? [note.labelId] : []) ?? []))
+  const merged = mergeLabels(destinationLabels, value.labels, used)
   const items = choices.map(choice => {
     if (seen.has(choice.key)) throw new Error('Select only one candidate for each identity.')
     seen.add(choice.key)
-    const note = candidates[choice.source]?.get(choice.key)
+    const candidate = candidates[choice.source]?.get(choice.key)
+    const note: ArchiveNote | undefined = candidate && { ...candidate, notes: candidate.notes.map(item => {
+      const { labelId, ...rest } = item
+      return labelId ? { ...rest, labelId: merged.remap.get(labelId) ?? labelId } : rest
+    }) }
     if (!note || !states.has(choice.key)) throw new Error('Unknown restore candidate.')
     const before = states.get(choice.key)!
     const dirty = dirtyKeys.has(choice.key)
-    const action = before !== null && sameCollection(before, collection(note.notes)) && !dirty ? 'identical'
+    const unmapped = candidate!.notes.some(item => item.labelId !== undefined && !merged.remap.has(item.labelId))
+    const action = before !== null && !unmapped && sameCollection(before, collection(note.notes)) && !dirty ? 'identical'
       : before === null && !dirty ? 'create' : choice.replace ? 'replace' : 'conflict'
     return Object.freeze({ key: choice.key, note, before, dirty, action })
   })
   const originals = items.filter(item => item.action === 'replace' && item.before !== null)
     .map(item => ({ ...parseNoteKey(item.key), notes: item.before!.notes }))
-  return Object.freeze({ items: Object.freeze(items), protection: archive(originals, drafts) })
+  const imported = new Set(items.filter(item => item.action === 'create' || item.action === 'replace').flatMap(item => item.note.notes.flatMap(note => note.labelId ? [note.labelId] : [])))
+  const destinationIds = new Set(destinationLabels.map(label => label.id))
+  const labels = merged.labels.filter(label => destinationIds.has(label.id) || imported.has(label.id))
+  return Object.freeze({ items: Object.freeze(items), protection: archive(originals, drafts, destinationLabels), labels, beforeLabels: destinationLabels })
 }

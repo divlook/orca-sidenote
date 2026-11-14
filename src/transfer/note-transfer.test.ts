@@ -20,26 +20,26 @@ function fixture(initial: [string, unknown][] = []) {
 }
 
 test('v2 backup preserves IDs, order, empty cards, exact text and legacy v1 imports as one note', () => {
-  const expected = { format: 'orca-sidenote-notes', version: 2, notes: [first, second],
+  const expected = { format: 'orca-sidenote-notes', version: 3, labels: [], notes: [first, second],
     recoveryDrafts: [{ ...first, notes: [] }] }
   assert.deepEqual(decodeArchive(encodeArchive(archive(expected.notes, expected.recoveryDrafts))), expected)
   const fixture = '{"format":"orca-sidenote-notes","version":2,"notes":[{"hostId":null,"path":"/fixture","notes":[{"id":"n","text":"line\\r\\nnext"}]}],"recoveryDrafts":[]}'
-  const independentlyAuthored = { format: 'orca-sidenote-notes', version: 2, notes: [
+  const independentlyAuthored = { format: 'orca-sidenote-notes', version: 3, labels: [], notes: [
     { hostId: null, path: '/fixture', notes: [{ id: 'n', text: 'line\r\nnext' }] }
   ], recoveryDrafts: [] }
   assert.deepEqual(decodeArchive(new TextEncoder().encode(fixture)), independentlyAuthored)
-  assert.deepEqual(JSON.parse(new TextDecoder().decode(encodeArchive(archive(independentlyAuthored.notes, [])))), JSON.parse(fixture))
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(encodeArchive(archive(independentlyAuthored.notes, [])))), independentlyAuthored)
   for (const text of ['', 'one\n---\ntwo', '{"version":2,"notes":[]}']) {
     const value = decodeArchive(new TextEncoder().encode(JSON.stringify({
       format: 'orca-sidenote-notes', version: 1, notes: [{ hostId: null, path: '/legacy', text }], recoveryDrafts: []
     })))
     assert.deepEqual(value.notes[0].notes, [{ id: 'legacy', text }])
-    assert.equal(value.version, 2)
+    assert.equal(value.version, 3)
   }
 })
 
 test('whole archive rejects unknown fields, duplicate scopes or IDs, versions, UTF8 and sizes', () => {
-  for (const value of [{ ...archive([], []), version: 3 }, { ...archive([], []), settings: {} },
+  for (const value of [{ ...archive([], []), version: 4 }, { ...archive([], []), settings: {} },
     { ...archive([], []), notes: [first, first] },
     { ...archive([], []), notes: [{ ...first, notes: [{ id: 'a', text: 4 }] }] },
     { ...archive([], []), notes: [{ ...first, notes: [{ id: 'a', text: '' }, { id: 'a', text: '' }] }] },
@@ -92,7 +92,7 @@ test('scope conflicts protect complete originals and cancellation blocks replace
   await assert.rejects(() => transfer.commitRestore(plan, true))
   transfer.protectRestore(plan, 'saved')
   await transfer.commitRestore(plan, true)
-  assert.deepEqual(values.get(key), { version: 2, notes: first.notes })
+  assert.deepEqual(values.get(key), { version: 3, notes: first.notes })
   assert.equal(values.get(noteKey(second)), 'unrelated')
   assert.equal(values.get('settings:v1'), 'keep')
   assert.equal(session.view.invalidations.has(editorKey(key, 'legacy')), true)
@@ -237,7 +237,7 @@ test('write-then-reject refreshes clean cards on retry or close and invalidates 
     const plan = await transfer.previewRestore(archive([first], []), choices)
     transfer.protectRestore(plan, 'saved')
     assert.equal((await transfer.commitRestore(plan, true)).outcomeUnknown, key)
-    assert.deepEqual(values.get(key), { version: 2, notes: first.notes })
+    assert.deepEqual(values.get(key), { version: 3, notes: first.notes })
     if (retry) {
       const next = await transfer.previewRestore(archive([first], []), choices)
       assert.equal(next.items[0].action, 'identical')
@@ -275,7 +275,7 @@ test('unknown writes never overwrite dirty empty recovery and identical previews
   assert.equal(session.view.notes[0].text, '')
   assert.equal(session.view.dirty, true)
   assert.equal(session.view.invalidations.size, 0)
-  assert.deepEqual(values.get(key), { version: 2, notes: first.notes })
+  assert.deepEqual(values.get(key), { version: 3, notes: first.notes })
 })
 
 test('identical restore refreshes stale clean collections but keeps unchanged card history', async () => {

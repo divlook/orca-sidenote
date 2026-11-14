@@ -2,10 +2,10 @@
 
 ## Unload, disable, and re-enable
 
-Preserve unsaved text before changing plugin state. To remove this development override, run from the checkout root:
+Preserve unsaved content before changing plugin state. Use a [notes backup](DATA.md#back-up-notes) to preserve complete collections, including note order and labels. To remove this development override, run from the checkout root:
 
 ```sh
-/Applications/Orca.app/Contents/Resources/bin/orca plugin dev unload . --environment local --json
+/Applications/Orca.app/Contents/Resources/bin/orca plugin dev unload "$PWD" --environment local --json
 ```
 
 An installed plugin with the same key becomes available again. It may need its own approval if its access differs. Unloading does not disable that plugin or guarantee note retention.
@@ -29,11 +29,11 @@ Disabling needs no approval. Re-enabling a disabled code-running plugin needs ap
 
 | Symptom | Checks and response |
 | --- | --- |
-| Save error / `Retry save` | Keep the panel open and copy the text elsewhere. Inspect the error, select **Retry save**, and check whether the error reappears. A failed draft may exist only in panel memory. |
+| Save error / `Retry save` | Keep the panel open and preserve the affected collection through a [notes backup](DATA.md#back-up-notes), or copy its content elsewhere. Inspect the error, select **Retry save**, and check whether the error reappears. A recovery collection may exist only in panel memory. |
 | `Location unavailable` / `Switching…` | Check the active worktree and installed CLI path. Run the read-only query below. Incomplete or ambiguous results block editing to protect notes. |
-| `Editor unavailable` | Check the panel bundle and build errors. Preserve unsaved text before rebuilding or reloading. Keep fail-closed editor readiness enabled. |
-| `Settings unavailable` | Inspect the settings error. Use the explicit replacement procedure in [Usage](USAGE.md#note-settings). Do not reset note storage. |
-| Preview link error | Inspect the error. A failed link must not clear the note or disable editing. |
+| Editor initialization or transaction error | Check the panel bundle and build errors. Preserve unsaved content before rebuilding or reloading. Keep fail-closed editor readiness enabled. |
+| Preference error | Inspect the settings error. Use the explicit replacement procedure in [Usage](USAGE.md#note-settings). Do not reset note storage. |
+| Note link error | Inspect the error. A failed link must not clear the note or disable editing. |
 
 ```sh
 /Applications/Orca.app/Contents/Resources/bin/orca worktree ps --environment local --limit 10000 --json

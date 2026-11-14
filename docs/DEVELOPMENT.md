@@ -27,12 +27,12 @@ The build deletes and recreates `dist/`. Keep generated bundles, assets, and not
 
 ## Load the development folder
 
-Load only a trusted checkout. The manifest uses `trusted-worker`, which runs Node code with your account permissions. `workspace:read` supports worktree-change events, `workspace:write` lets the worker open worktree files in Orca's editor, and `storage:own` stores notes and settings. The added `workspace:write` permission requires users to review and approve access again. Later edits in an approved development folder can run without renewed approval. Review access again when capabilities or execution behavior change.
+Load only a trusted checkout. The manifest uses `trusted-worker`, which runs Node code with your account permissions. `workspace:read` supports worktree-change events, `workspace:write` lets the worker open worktree files in Orca's editor, and `storage:own` stores notes and settings. Users upgrading from a version without `workspace:write` must review and approve the added access. Later code edits in an approved development folder can run without renewed approval. New capabilities, a higher execution level, or changed commands and shortcuts require renewed approval.
 
 Load the folder into the local environment:
 
 ```sh
-/Applications/Orca.app/Contents/Resources/bin/orca plugin dev load . --environment local --json
+/Applications/Orca.app/Contents/Resources/bin/orca plugin dev load "$PWD" --environment local --json
 ```
 
 This development folder overrides an installed plugin with the same key. If Orca returns `approval_required` or `approval_stale`, review the requested access and returned command. Rerun that command with its returned fingerprint only if you explicitly approve the access. Do not invent a fingerprint.
@@ -42,7 +42,7 @@ Enable plugins in Settings → Plugins. Open **Note** in the right sidebar. The 
 Orca reloads development files when they change. This repository has no automatic asset-build watcher. Run `npm run build` after changing bundled source or dependencies. If you need an explicit reload, run:
 
 ```sh
-/Applications/Orca.app/Contents/Resources/bin/orca plugin dev reload . --environment local --json
+/Applications/Orca.app/Contents/Resources/bin/orca plugin dev reload "$PWD" --environment local --json
 ```
 
 Regenerate API types after an Orca update if they are missing or stale. Do not hand-edit `.orca/types/`. See [Verification](VERIFICATION.md) for checks and [Architecture](ARCHITECTURE.md) for code ownership.

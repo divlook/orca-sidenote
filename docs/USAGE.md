@@ -1,14 +1,20 @@
 # Usage
 
-Open **Note** in Orca's right sidebar. Each host and folder has an ordered collection of Markdown notes. The **Add note** icon in the heading and the button after the last card append a blank, expanded note in editing mode and focus its body. Cards grow with their content; only the outer list scrolls vertically. Long Preview code blocks can scroll horizontally.
+Open **Note** in Orca's right sidebar. Each host and folder has an ordered collection of Markdown notes. The **Add note** icon in the heading and the button after the last card append a blank, expanded note in editing mode and focus its body. Cards grow with their content; only the outer list scrolls vertically. Long code blocks in reading mode can scroll horizontally.
 
-Use **Minimize all notes** and **Expand all notes** beside the heading's Add note button to change every card in the current collection. These controls preserve each card's reading or editing mode, note content, order, cursor, and undo history.
+Use **Minimize all notes** and **Expand all notes** beside the heading's Add note button to change displayed cards, including temporarily displayed nonmatching cards. These controls preserve each card's reading or editing mode, note content, order, cursor, and undo history.
 
-Each card has a drag grip and three actions: **Read note / Edit note**, **Minimize note / Expand note**, and **Delete note**. Drag the toolbar outside the action buttons to a blue insertion line to reorder cards, or click the grip and press **Option+Up/Down**. Tab skips the grip and still reaches the three action buttons. Order saves for the current host and path.
+Each card has a drag grip, a label picker, and three other actions: **Read note / Edit note**, **Minimize note / Expand note**, and **Delete note**. Drag the toolbar outside the action buttons to a blue insertion line to reorder cards, or click the grip and press **Option+Up/Down**. Tab skips the grip and reaches the action buttons. Order saves for the current host and path.
+
+Select **+ Label** to assign one label, or select an existing label to replace it or choose **No label**. An assigned label subtly tints the card toolbar; the note body and minimized summary keep their usual backgrounds. The picker remains available on minimized cards. Labels classify notes without changing their order or enforcing a workflow.
+
+Use the filter below the heading to select labels and **No label** by clicking their rows. The menu stays open for multiple selections. A card matches any selected option; with none selected, all cards appear. **Clear** shows the full collection. The count includes temporarily displayed cards. A nonmatching new card or a focused card whose label changes remains visible until focus leaves; **Filter pending** identifies it. Changing the filter applies immediately without deleting an empty card. Ordinary exit still prunes empty cards.
+
+The filter is saved separately for each exact host and path and is excluded from backups. Filtering preserves hidden cards' content, mode, minimization, cursor, and undo history. Reordering moves displayed cards among displayed slots while hidden notes stay in their positions. Deleting a selected label removes it from the filter; resetting labels does not attach selections to the new defaults. If the filter preference cannot be read or saved, use **Retry filter**. See [Note filtering](FILTERING.md) for the full behavior.
 
 When focus leaves a card whose content is empty or only whitespace, the card is deleted without a confirmation dialog. Existing empty cards are not swept on load. Moving focus within a card, dragging, readiness changes, and switching worktrees do not trigger this deletion. If queued typing makes the note nonempty, it is retained.
 
-Minimized cards show a single-line plain-text summary of the first nonempty top-level Markdown block. Paragraphs, lists, and code blocks use the whole block, with whitespace normalized for display. Nonempty notes have a literal `...` suffix; empty notes show **Empty note**. The summary affects display only; the original body stays intact. Every toolbar action remains available while minimized. Click the summary or choose **Edit note** to expand the card and focus its editor. Use the inward-pointing arrows to minimize a card, or the outward-pointing arrows between two horizontal lines to expand it without changing its reading or editing mode. Each note keeps its own selection, cursor, and undo history while you switch modes, minimize, reorder, or visit another worktree.
+Minimized cards show a single-line plain-text summary of the first nonempty top-level Markdown block. Paragraphs, lists, and code blocks use the whole block, with whitespace normalized for display. Nonempty notes have a literal `...` suffix; empty notes show **Empty note**. The summary affects display only; the original body stays intact. Every toolbar action remains available while minimized. Click the summary or choose **Edit note** to expand the card and focus its editor. Use the inward-pointing chevrons to minimize a card, or the outward-pointing chevrons to expand it without changing its reading or editing mode. Each note keeps its own selection, cursor, and undo history while you switch modes, minimize, reorder, or visit another worktree.
 
 Use reading mode to read formatted Markdown and toggle task checkboxes with a click or Space. Single line breaks in paragraphs and list items remain visible; blank lines still separate blocks. Changes save normally and can be undone in that note's editor. Raw HTML checkboxes stay read-only. Images do not load. Long cards keep their toolbar visible while you scroll.
 
@@ -16,13 +22,13 @@ In reading mode, open HTTP and HTTPS links in your default browser, a new Orca b
 
 Before opening a local file, SideNote resolves its canonical path and checks that it is inside the worktree. Orca's editor API does not guard against a concurrent filesystem change between that check and opening the file.
 
-Opening files requires the new `workspace:write` permission. Review and approve the requested access when Orca asks; approval does not open a link automatically.
+Opening files requires the `workspace:write` permission. Review and approve the requested access when Orca asks. Approval does not open a link automatically.
 
 The subtitle shows the current project and worktree. During **Switching…**, editing stays disabled until the new collection is ready. An ambiguous or unavailable location blocks editing. A confirmed development installation shows a **DEV** badge.
 
 ## Code blocks
 
-Preview displays fenced code as escaped plain text, regardless of the language name:
+Reading mode displays fenced code as escaped plain text, regardless of the language name:
 
 ````markdown
 ```typescript
@@ -31,7 +37,7 @@ console.log(message)
 ```
 ````
 
-Code blocks preserve whitespace without syntax highlighting. Mermaid fences display their source as ordinary code. Viewing a note does not change Source or saved text.
+Code blocks preserve whitespace without syntax highlighting. Mermaid fences display their source as ordinary code. Viewing a note does not change its Markdown text.
 
 ## Note settings
 
@@ -40,6 +46,10 @@ Code blocks preserve whitespace without syntax highlighting. Mermaid fences disp
 Turn confirmation Off to make future trash clicks delete immediately and irreversibly. Changing the setting itself deletes nothing, and you can turn it back on at any time. It does not affect the separate **Delete all notes…** action.
 
 **Show Source line numbers** controls the gutter for all notes and defaults to On. **Default note mode** defaults to Editing. Choose Reading to open existing notes in reading mode and return edited notes to reading mode when focus leaves the card; new notes start in editing mode. Settings apply and save automatically. If saving a setting fails, its last successful value applies; change the control again to retry. Unreadable deletion confirmation, line-number, or default-mode preferences block editing until explicitly replaced. An unreadable web-link preference blocks web links, not editing.
+
+The note mode, web-link destination, and label color dropdowns support arrow keys, Home, End, Enter, and Space. Escape closes an open dropdown before closing settings.
+
+Under **Labels**, use the color dropdown to choose a named color when adding a label. To edit an existing label, change its name or color and select **Save changes** for that row; the unsaved indicator remains until you save or revert the edit. Other preferences save automatically. If a label edit fails, its draft remains available to retry. Drag a label or use its up and down buttons to change the shared picker order. Names must be unique after trimming and ignoring English letter case. Deleting a label clears its assignments throughout this store. **Reset labels…** clears all assignments and replaces the catalog with the four defaults. Before either action, save or copy unsaved changes in other Note panels and close them. Review the affected note count and confirm. See [Note labels](LABELS.md) for catalog behavior and [Notes and data](DATA.md) for backup and restore.
 
 There is no plugin character limit or character counter. Host storage quotas still apply, and writes can fail.
 
@@ -55,9 +65,9 @@ Pasting a single HTTP or HTTPS URL over selected ordinary single-line text creat
 
 Enter continues unordered lists, increments ordered lists, and creates unchecked tasks. Indentation is preserved. Enter on an empty item exits that list level. Ordered markers use at most nine digits and repeat the maximum number when reached. Quoted lists, literal code or HTML, selections, and mixed list/non-list cursor groups retain normal Enter behavior. Other pasted Markdown is not rewritten.
 
-Right-click Source for **Change All Occurrences**, **Cut**, **Copy**, and **Paste**. Clipboard permission failures leave the note unchanged and show an error. Source uses CodeMirror and preserves original Markdown, including mixed line separators.
+Right-click the editor for **Change All Occurrences**, **Cut**, **Copy**, and **Paste**. Clipboard permission failures leave the note unchanged and show an error. The editor uses CodeMirror and preserves original Markdown, including mixed line separators.
 
-Changes save automatically without saving or success labels. If saving fails, an error and **Retry save** appear. Your complete collection draft, including new notes and reordered cards, stays in panel memory for retry or backup. Closing the panel or quitting the app while saving has failed may lose unsaved text.
+Note changes save automatically without saving or success labels. If saving fails, an error and **Retry save** appear. Your complete collection draft, including new notes and reordered cards, stays in panel memory for retry or backup. Closing the panel or quitting the app while saving has failed may lose unsaved changes.
 
 ## Your notes
 

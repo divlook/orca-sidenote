@@ -36,9 +36,9 @@ test('exact keys, strict collections and lossless lazy legacy migration', async 
     assert.equal(values.get(noteKey(local)), text)
     assert.deepEqual(session.view.notes.map(({ id, text }) => ({ id, text })), [{ id: 'legacy', text }])
     await session.save(text, session.view.notes[0].key)
-    assert.deepEqual(values.get(noteKey(local)), { version: 2, notes: [{ id: 'legacy', text }] })
+    assert.deepEqual(values.get(noteKey(local)), { version: 3, notes: [{ id: 'legacy', text }] })
   }
-  for (const value of [{ version: 3, notes: [] }, { version: 2, notes: [{ id: '', text: '' }] },
+  for (const value of [{ version: 4, notes: [] }, { version: 2, notes: [{ id: '', text: '' }] },
     { version: 2, notes: [{ id: 'a', text: '' }, { id: 'a', text: '' }] },
     { version: 2, notes: [], extra: true }, { version: 2, notes: [{ id: 'a', text: '', extra: 1 }] }]) {
     assert.throws(() => readCollection(value))
