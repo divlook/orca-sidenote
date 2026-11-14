@@ -1,5 +1,26 @@
 # orca-sidenote
 
+## 0.8.0
+
+### Minor Changes
+
+- 336f402: Filter notes by label with per-location view preferences.
+- 336f402: Add shared note labels and include label data in backups.
+
+### Patch Changes
+
+- 336f402: Keep settings header and Close button visible while scrolling.
+- 336f402: Update the minimize and expand icons for note cards and bulk controls.
+- 336f402: Prevent delayed label selections from applying after switching away and back, and require a catalog reload after an unconfirmed reset or restore write.
+- 336f402: Use consistent settings dropdowns and move the settings scrollbar to the edge.
+- 336f402: Restore themed scrollbars in notes and settings.
+- 336f402: Use compact named color dropdowns in label settings.
+- 336f402: Show label colors and make unsaved label edits clear.
+- 336f402: Tint note card toolbars with their assigned label color.
+- 336f402: Keep label picker options accessible above subsequent note cards.
+- 336f402: Select filter options by clicking their rows.
+- 336f402: Improve settings header separation and bottom scrolling space.
+
 ## 0.7.0
 
 ### Minor Changes
