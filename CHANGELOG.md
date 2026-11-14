@@ -1,5 +1,12 @@
 # orca-sidenote
 
+## 0.6.0
+
+### Minor Changes
+
+- 559dbb2: Open reading-mode links in a browser or local worktree files in Orca, with a configurable browser destination. Remote web links are supported; remote file links are unsupported and show an error. Orca will request renewed access approval for the added `workspace:write` permission.
+- 559dbb2: Wrap selections with parentheses, brackets, braces, double quotes, single quotes, or backticks, format Markdown with shortcuts, and paste URLs as links. Empty cursors insert only the typed character without auto-closing.
+
 ## 0.5.0
 
 ### Minor Changes
