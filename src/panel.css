@@ -32,6 +32,19 @@ html.dark .card-toolbar[class*="label-color-"] { background: color-mix(in srgb, 
 .note-source .cm-editor { min-height: 64px; }
 .note-source, .note-preview, .note-summary { border-radius: 0 0 5px 5px; overflow: clip; }
 article { padding: 12px; overflow-wrap: anywhere; }
+.note-context-menu { position: fixed; z-index: 20; width: max-content; min-width: min(160px, calc(100vw - 12px)); max-width: min(320px, calc(100vw - 12px)); padding: 4px;
+  background: var(--orca-background); color: var(--orca-foreground); border: 1px solid var(--orca-border);
+  border-radius: 6px; box-shadow: 0 4px 16px #0003; font: 13px/1.5 system-ui, sans-serif; }
+.note-context-menu button { display: block; width: 100%; padding: 5px 8px; text-align: left; color: inherit; border-radius: 3px; overflow-wrap: anywhere; }
+.note-context-menu button:not(:disabled):hover, .note-context-menu button:focus-visible { background: var(--orca-muted); }
+.note-context-menu button:disabled { opacity: .5; cursor: default; }
+.note-context-tooltip-row { display: flex; align-items: center; }
+.note-context-tooltip-row > button:disabled { flex: none; width: auto; padding-right: 2px; }
+.note-context-menu .note-context-info { flex: none; width: 24px; padding: 2px; text-align: center; }
+.note-context-tooltip { position: fixed; z-index: 1; overflow: auto; overflow-wrap: anywhere; pointer-events: none;
+  padding: 5px 8px; border: 1px solid var(--orca-border); border-radius: 4px; background: var(--orca-background);
+  color: var(--orca-foreground); box-shadow: 0 4px 12px #0003; font-size: 12px; visibility: hidden; }
+.note-clipboard-error { padding: 6px 12px; color: var(--orca-destructive); font: 13px/1.5 system-ui, sans-serif; }
 .add-note { flex-shrink: 0; width: 100%; padding: 8px 12px; text-align: left; color: var(--orca-foreground);
   border: 1px dashed var(--orca-border); border-radius: 6px; }
 .add-note:hover { background: var(--orca-muted); }
@@ -141,16 +154,6 @@ button:disabled { cursor: default; opacity: .5; }
 #transfer-candidates legend { max-width: 100%; overflow-wrap: anywhere; }
 #transfer-candidates select, #transfer-file { max-width: 100%; font: inherit; }
 #transfer-candidates select { width: 100%; color: var(--orca-foreground); background: var(--orca-background); }
-.source-context-menu { position: fixed; z-index: 100; max-width: calc(100vw - 12px); font-family: var(--orca-font-ui, system-ui, sans-serif);
-  padding: 4px; border: 1px solid var(--orca-border); border-radius: 5px;
-  color: var(--orca-popover-foreground, var(--orca-foreground));
-  background: var(--orca-popover, var(--orca-background)); box-shadow: 0 4px 14px rgb(0 0 0 / 25%); }
-.source-context-menu button { display: block; width: 100%; padding: 5px 12px; text-align: left; color: inherit; }
-.source-context-menu button:hover, .source-context-menu button:focus-visible { background: var(--orca-muted); }
-.source-context-menu button:first-child { border-bottom: 1px solid var(--orca-border); }
-.source-context-message { max-width: 240px; padding: 4px; font-size: 12px; color: var(--orca-destructive); }
-.source-context-message:empty { display: none; }
-.source-context-shortcut { float: right; margin-left: 24px; color: var(--orca-muted-foreground); }
 .note-card-removing { overflow: clip; pointer-events: none; flex-shrink: 0; }
 .note-card-removing .card-toolbar { position: static; }
 .note-removal-active { overflow-anchor: none; }

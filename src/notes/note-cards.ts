@@ -341,6 +341,7 @@ export function createNoteCards(options: CardListOptions) {
       }
       if (card.scope !== view.scopeKey || view.loading || !currentKeys.has(card.key)) {
         card.source?.sync(card.text, false, view.epoch, view.invalidations.get(card.key))
+        card.markdown.suspend()
       }
       card.node.hidden = card.scope !== view.scopeKey || view.loading || !currentKeys.has(card.key)
     }
@@ -388,7 +389,7 @@ export function createNoteCards(options: CardListOptions) {
       icon(card.mode, card.reading ? 'Edit note' : 'Read note', card.reading ? icons.pencil : icons.eye)
       icon(card.collapse, card.collapsed ? 'Expand note' : 'Minimize note', card.collapsed ? icons.expand : icons.minimize)
       card.collapse.setAttribute('aria-expanded', String(!card.collapsed))
-      if (card.reading && !card.collapsed) card.markdown.render(note.text, note.key, ready, view.epoch)
+      if (card.reading && !card.collapsed && !card.node.hidden) card.markdown.render(note.text, note.key, ready, view.epoch)
       else card.markdown.suspend()
       if (focusNew === card.key && ready) {
         focusNew = undefined; card.node.scrollIntoView({ block: 'nearest' }); card.source?.show(true)

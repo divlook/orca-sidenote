@@ -1,14 +1,14 @@
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { EditorView, crosshairCursor, drawSelection, dropCursor, keymap, lineNumbers, rectangularSelection } from '@codemirror/view'
-import { historyKeymap, indentWithTab, standardKeymap } from '@codemirror/commands'
+import { historyKeymap, indentWithTab, selectAll, standardKeymap } from '@codemirror/commands'
 import { search, searchKeymap } from '@codemirror/search'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import type { TaskMarker } from '../markdown/markdown-tasks'
 import { acceptSourceTransaction, documentPosition, exactSource, rawEdit, rawPosition, sourceEOL, sourceExtensions, sourceField } from './source-state'
 import { occurrenceSession } from './source-commands'
 import { pasteSource, selectedSource, type SourceClipboard } from './source-clipboard'
-import { sourceMenu } from './source-menu'
-import { sourceKeymap } from './source-actions'
+import { changeAllOccurrences, sourceKeymap } from './source-actions'
+import { createContextMenu, primaryModifier } from '../context-menu'
 import { sourceTheme } from './source-theme'
 import { selectionWrapping } from './source-formatting'
 
@@ -26,6 +26,7 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
   let enabled = false, disposed = false, broken = false, initialized = false
   let epoch = 0, invalidation = 0, revision = 0, visibleNumbers = true
   const clipboard: SourceClipboard = {}
+  let menuCopy: { state: EditorState; confirmed: boolean } | undefined
   let drag: { state: EditorState; ranges: readonly { from: number; to: number }[]; text: string } | undefined
   const active = () => !disposed && !broken && enabled && initialized
   function copyPayload(event: ClipboardEvent, editor: EditorView) {
@@ -35,6 +36,7 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
     event.clipboardData.setData('application/x-sidenote-lines', String(payload.linewise))
     clipboard.copied = { text: payload.text, linewise: payload.linewise }
     event.preventDefault()
+    if (menuCopy?.state === editor.state) menuCopy.confirmed = true
     return payload
   }
   function extensions(text: string) {
@@ -129,10 +131,36 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
   // at the outer DOM listener with the exact payload captured for that event.
   const exactDrag = (event: DragEvent) => { if (drag?.state === view.state) event.dataTransfer?.setData('text/plain', drag.text) }
   view.dom.addEventListener('dragstart', exactDrag)
-  let removeMenu: (() => void) | undefined
+  const menu = createContextMenu(container, () => {
+    if (disposed || !initialized) return []
+    const state = view.state, capturedRevision = revision, capturedEpoch = epoch
+    const current = () => !disposed && initialized && view.state === state && revision === capturedRevision && epoch === capturedEpoch
+    const payload = selectedSource(state)
+    const copy = (cut: boolean) => {
+      if (!current() || cut && !active()) return
+      menu.clearError()
+      try {
+        view.focus()
+        if (!current()) return
+        menuCopy = { state, confirmed: false }
+        const success = document.execCommand('copy') && menuCopy.confirmed
+        if (!success) throw new Error('Copy failed. Your note was not changed. Use the keyboard shortcut to try again.')
+        if (cut && current() && active() && !view.state.readOnly) {
+          view.dispatch({ changes: payload.ranges.map(range => ({ from: range.from, to: range.to })), userEvent: 'delete.cut' })
+        }
+      } catch (error) { menu.fail(error instanceof Error ? error.message : String(error)) }
+      finally { menuCopy = undefined }
+    }
+    return [
+      { label: 'Cut', disabled: !active() || state.readOnly, run: () => copy(true) },
+      { label: 'Copy', run: () => copy(false) },
+      { label: 'Paste', disabled: true, tooltip: `Menu paste is unsupported. Use ${primaryModifier()}+V to paste.`, run: () => {} },
+      { label: changeAllOccurrences.label, disabled: !active(), run: () => { if (current() && active()) { view.focus(); changeAllOccurrences.run(view) } } },
+      { label: 'Select All', run: () => { if (current()) { view.focus(); if (current()) selectAll(view) } } }
+    ]
+  })
   let observer: ResizeObserver | undefined
   try {
-    removeMenu = sourceMenu(view, () => disposed || !initialized ? null : revision, clipboard)
     observer = new ResizeObserver(() => { if (!disposed && !container.hidden) view.requestMeasure() })
     observer.observe(container)
   function configure() {
@@ -144,9 +172,11 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
       ready = ready && !broken
       if (epoch !== nextEpoch || invalidation !== nextInvalidation) {
         initialized = false; epoch = nextEpoch; invalidation = nextInvalidation; revision++
+        menu.close()
       }
       const changedReady = enabled !== ready
       if (changedReady) revision++
+      if (changedReady) menu.close()
       enabled = ready
       if (!ready) { if (changedReady) configure(); return }
       if (!initialized) {
@@ -174,10 +204,11 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
     },
     show(focus) { if (!disposed) { view.requestMeasure(); if (focus && enabled) view.focus() } },
     theme() { if (!disposed) view.dispatch({ effects: palette.reconfigure(sourceTheme()) }) },
-    dispose() { if (disposed) return; disposed = true; enabled = false; revision++; observer?.disconnect(); removeMenu?.(); view.dom.removeEventListener('dragstart', exactDrag); view.destroy(); drag = undefined }
+    dispose() { if (disposed) return; menu.dispose(); disposed = true; enabled = false; revision++; observer?.disconnect(); view.dom.removeEventListener('dragstart', exactDrag); view.destroy(); drag = undefined }
   }
   } catch (error) {
-    observer?.disconnect(); removeMenu?.(); view.dom.removeEventListener('dragstart', exactDrag); view.destroy()
+    menu.dispose()
+    observer?.disconnect(); view.dom.removeEventListener('dragstart', exactDrag); view.destroy()
     throw error
   }
 }

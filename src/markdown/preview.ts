@@ -2,6 +2,7 @@ import { marked, Renderer, type Tokens } from 'marked'
 import DOMPurify from 'dompurify'
 import { mapMarkdownTasks, type TaskMarker } from './markdown-tasks'
 import { parseNoteLink } from './note-links'
+import { copyMarkdown, createContextMenu } from '../context-menu'
 
 export interface MarkdownPreview {
   render(text: string, key?: string | null, ready?: boolean, epoch?: number): void
@@ -18,6 +19,18 @@ export function createPreview(element: HTMLElement, openLink: (href: string) => 
   let renderedEpoch = -1
   let trustedInputs: HTMLInputElement[] = []
   let destinations = new WeakMap<Element, string>()
+  let disposed = false
+  const menu = createContextMenu(element, () => {
+    if (disposed || rendered === undefined || identity === null || identity === undefined) return []
+    const text = rendered, key = identity, revision = generation, epoch = renderedEpoch
+    return [{ label: 'Copy Markdown', run: () => {
+      if (disposed || !element.isConnected || rendered !== text || identity !== key || generation !== revision || renderedEpoch !== epoch) return
+      menu.clearError()
+      try {
+        if (!copyMarkdown(element, text)) throw new Error('Copy Markdown failed. Your note was not changed. Try again.')
+      } catch (error) { menu.fail(error instanceof Error ? error.message : String(error)); failed(error) }
+    } }]
+  })
   const activateLink = (event: Event) => {
     const anchor = event.target instanceof Element ? event.target.closest('a') : null
     if (!anchor) return
@@ -34,10 +47,12 @@ export function createPreview(element: HTMLElement, openLink: (href: string) => 
   element.addEventListener('keydown', event => { if (event.key === 'Enter') { event.stopPropagation(); activateLink(event) } })
   return {
     render(text: string, key: string | null = null, ready = false, epoch = 0) {
+      if (disposed) return
       editable = ready
       currentEpoch = epoch
       for (const input of trustedInputs) input.disabled = !ready
       if (rendered === text && identity === key && renderedEpoch === epoch) return
+      menu.close()
       const focused = document.activeElement instanceof HTMLInputElement && element.contains(document.activeElement)
         && identity === key ? document.activeElement.dataset.taskOffset : undefined
       const revision = ++generation
@@ -110,12 +125,13 @@ export function createPreview(element: HTMLElement, openLink: (href: string) => 
       rendered = text
     },
     suspend() {
+      menu.close()
       if (rendered === undefined && trustedInputs.length === 0) return
       generation++
       rendered = undefined
       trustedInputs = []; editable = false
       element.replaceChildren()
     },
-    dispose() { this.suspend() }
+    dispose() { if (disposed) return; this.suspend(); disposed = true; menu.dispose(); element.removeEventListener('click', activateLink) }
   }
 }
