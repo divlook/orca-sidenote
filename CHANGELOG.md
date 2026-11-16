@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.8.3
+
+### Patch Changes
+
+- b4befce: Keep note cards visible and read-only while rechecking the active worktree, avoiding flicker when the host and folder have not changed.
+
 ## 0.8.2
 
 ### Patch Changes
