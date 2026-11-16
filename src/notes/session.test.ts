@@ -1,9 +1,9 @@
 /// <reference types="node" />
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { NoteSession, type NoteStore } from './session'
+import { NoteSession, type NoteOperation, type NoteStore } from './session'
 import { noteKey, type NoteTarget } from '../protocol'
-import { collection, editorKey, readCollection } from './note-collection'
+import { collection, editorKey, readCollection, type NoteCollection } from './note-collection'
 
 const local: NoteTarget = { path: '/projects/app', hostId: 'local' }
 const branch: NoteTarget = { path: '/projects/app-feature', hostId: 'local' }
@@ -92,6 +92,178 @@ test('queued snapshots preserve optimistic card edits and never cross focus scop
   await Promise.all([first, second, created])
   assert.deepEqual(texts(values, local), ['second'])
   assert.deepEqual(texts(values, branch), [''])
+})
+
+test('waiting text saves coalesce full collections and settle together after the replacement attempt', async () => {
+  const initial = collection(Array.from({ length: 100 }, (_, i) => ({ id: `n${i}`, text: `saved${i}` })))
+  const { store, values } = memoryStore({ [noteKey(local)]: initial })
+  const firstStarted = Promise.withResolvers<void>(), releaseFirst = Promise.withResolvers<void>()
+  const latestStarted = Promise.withResolvers<void>(), releaseLatest = Promise.withResolvers<void>()
+  const attempts: NoteCollection[] = []
+  let notifications = 0, settled = 0
+  const session = new NoteSession({ ...store, set: async (key, value) => {
+    attempts.push(readCollection(value))
+    if (attempts.length === 1) { firstStarted.resolve(); await releaseFirst.promise }
+    else { latestStarted.resolve(); await releaseLatest.promise }
+    await store.set(key, value)
+  } }, () => { notifications++ })
+  await session.follow(async () => local)
+  notifications = 0
+  const first = session.save('in flight', session.view.notes[0].key)
+  await firstStarted.promise
+  const saves = Array.from({ length: 100 }, (_, i) =>
+    session.save(`latest${i}`, session.view.notes[i].key).then(() => { settled++ }))
+  assert.equal(session.view.pending, 101)
+  assert.equal(attempts.length, 1)
+  releaseFirst.resolve()
+  await latestStarted.promise
+  await first
+  assert.equal(settled, 0)
+  assert.equal(session.view.pending, 100)
+  assert.equal(session.view.dirty, true)
+  assert.equal(attempts[0].notes[0].text, 'in flight')
+  releaseLatest.resolve()
+  await Promise.all(saves)
+  assert.equal(settled, 100)
+  assert.equal(attempts.length, 2)
+  assert.equal(notifications, 103)
+  assert.deepEqual(readCollection(values.get(noteKey(local))), collection(initial.notes.map((note, i) => ({ ...note, text: `latest${i}` }))))
+  assert.equal(session.view.pending, 0)
+  assert.equal(session.view.dirty, false)
+})
+
+test('coalesced failure fulfills callers and retains the latest full draft for retry', async () => {
+  const { store, values } = memoryStore({ [noteKey(local)]: collection([{ id: 'a', text: 'a' }, { id: 'b', text: 'b' }]) })
+  const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  let calls = 0, fail = true
+  const errors: string[] = []
+  const session = new NoteSession({ ...store, set: async (key, value) => {
+    if (++calls === 1) { started.resolve(); await release.promise }
+    else if (fail) throw new Error('latest full draft failed')
+    await store.set(key, value)
+  } }, () => { errors.push(session.view.error) })
+  await session.follow(async () => local)
+  const first = session.save('in flight', session.view.notes[0].key)
+  await started.promise
+  const a = session.save('a latest\r\n', session.view.notes[0].key)
+  const b = session.save('b latest', session.view.notes[1].key)
+  release.resolve()
+  await Promise.all([first, a, b])
+  assert.equal(calls, 2)
+  assert.deepEqual(session.view.notes.map(note => note.text), ['a latest\r\n', 'b latest'])
+  assert.equal(session.view.error, 'latest full draft failed')
+  assert.equal(session.view.pending, 0)
+  assert.equal(session.view.dirty, true)
+  assert.equal(errors.at(-1), 'latest full draft failed')
+  fail = false
+  await session.retry()
+  assert.equal(calls, 3)
+  assert.deepEqual(texts(values, local), ['a latest\r\n', 'b latest'])
+  assert.equal(session.view.error, '')
+  assert.equal(session.view.dirty, false)
+})
+
+for (const barrier of ['create', 'reorder', 'retry', 'delete', 'prune', 'follow', 'scope', 'assign', 'lease'] as const) {
+  test(`waiting text snapshots do not merge across ${barrier} initiation`, async () => {
+    const { store } = memoryStore({ [noteKey(local)]: collection([{ id: 'a', text: 'saved' }, { id: 'blank', text: '' }]) })
+    const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+    const attempts: { key: string; value: NoteCollection }[] = []
+    const session = new NoteSession({ ...store, set: async (key, value) => {
+      if (key.startsWith('note:v1:')) {
+        attempts.push({ key, value: readCollection(value) })
+        if (attempts.length === 1) { started.resolve(); await release.promise }
+      }
+      await store.set(key, value)
+    } }, () => {
+      // Assignment notifies before its catalog awaits; nested text input must already see the barrier.
+      if (barrier === 'assign' && nested && session.labels.busy) {
+        nested = false
+        later = session.save('after barrier', card)
+      }
+    })
+    let nested = false, later: Promise<void> | undefined
+    await session.follow(async () => local)
+    await session.loadLabels()
+    const card = session.view.notes[0].key
+    const first = session.save('in flight', card)
+    await started.promise
+    const before = session.save('before barrier', card)
+    let operation: NoteOperation | undefined
+    let boundary: Promise<unknown>
+    switch (barrier) {
+      case 'create': boundary = session.createNote(); break
+      case 'reorder': boundary = session.reorderNotes(['blank', 'a']); break
+      case 'retry': boundary = session.retry(); break
+      case 'delete': boundary = session.deleteNote('blank'); break
+      case 'prune': boundary = session.pruneEmptyNote('blank'); break
+      case 'follow': boundary = session.follow(async () => local); await boundary; break
+      case 'scope':
+        boundary = session.follow(async () => branch); await boundary
+        await session.follow(async () => local)
+        break
+      case 'assign': nested = true; boundary = session.assignLabel(card, null); break
+      case 'lease': boundary = session.acquireNoteOperation().then(value => { operation = value }); break
+    }
+    later ??= session.save('after barrier', card)
+    release.resolve()
+    await Promise.all([first, before, boundary, later])
+    assert.equal(attempts[1].value.notes.find(note => note.id === 'a')?.text, 'before barrier')
+    if (barrier === 'lease') {
+      assert.equal(attempts.length, 2)
+      assert.equal(session.view.notes[0].text, 'before barrier')
+      await operation!.finish()
+    } else {
+      assert.equal(attempts.at(-1)?.value.notes.find(note => note.id === 'a')?.text, 'after barrier')
+    }
+  })
+}
+
+test('reentrant change callbacks preserve published save promises and deletion order', async () => {
+  const { store, values } = memoryStore({ [noteKey(local)]: collection([{ id: 'a', text: 'a' }, { id: 'b', text: 'b' }]) })
+  const writes: string[][] = []
+  let nested = false, saving: Promise<void> | undefined, deleting: Promise<void> | undefined
+  const session = new NoteSession({ ...store, set: async (key, value) => {
+    writes.push(readCollection(value).notes.map(note => note.text))
+    await store.set(key, value)
+  } }, () => {
+    if (!nested) return
+    nested = false
+    saving = session.save('nested', session.view.notes[1].key)
+    deleting = session.deleteNote('a')
+  })
+  await session.follow(async () => local)
+  nested = true
+  const outer = session.save('outer', session.view.notes[0].key)
+  await Promise.all([outer, saving, deleting])
+  assert.deepEqual(writes, [['outer', 'nested'], ['nested']])
+  assert.deepEqual(texts(values, local), ['nested'])
+  assert.equal(session.view.pending, 0)
+})
+
+test('note projections reuse unchanged inputs and expose current save and scope state', async () => {
+  const { store } = memoryStore({ [noteKey(local)]: 'saved' })
+  const observed: NoteSession['view'][] = []
+  const session = new NoteSession(store, () => { observed.push(session.view) })
+  await session.follow(async () => local)
+  const before = session.view
+  assert.equal(session.view.notes, before.notes)
+  const saving = session.save('edited', before.notes[0].key)
+  const pending = session.view
+  assert.notEqual(pending.notes, before.notes)
+  assert.equal(pending.notes[0].text, 'edited')
+  assert.equal(pending.pending, 1)
+  assert.equal(observed.at(-1)?.notes, pending.notes)
+  assert.equal(session.view.notes, pending.notes)
+  await saving
+  const saved = session.view
+  assert.notEqual(saved.notes, pending.notes)
+  assert.equal(saved.pending, 0)
+  assert.equal(saved.dirty, false)
+  assert.equal(observed.at(-1)?.notes, saved.notes)
+  assert.equal(session.view.notes, saved.notes)
+  await session.follow(async () => branch)
+  assert.equal(session.view.notes.length, 0)
+  assert.notEqual(session.view.notes, saved.notes)
 })
 
 test('late loads and target lookups cannot replace newer focus or newly typed cards', async () => {
@@ -547,4 +719,35 @@ test('automatic deletion queued before a focus round trip cannot prune the retur
   assert.equal(writes, 1)
   assert.deepEqual(texts(values, local), ['', 'queued sibling'])
   assert.equal(session.view.notes[0].id, 'blank')
+})
+
+test('cached views reflect clean draft refreshes while another unknown-write read is pending', async () => {
+  const { store, values } = memoryStore({ [noteKey(local)]: 'before', [noteKey(branch)]: 'branch' })
+  const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  let reconciling = false
+  const session = new NoteSession({ ...store,
+    get: async key => {
+      if (reconciling && key === noteKey(branch)) { started.resolve(); await release.promise }
+      return store.get(key)
+    },
+    set: async (key, value) => {
+      await store.set(key, value)
+      throw new Error('unknown write outcome')
+    }
+  }, () => {})
+  await session.follow(async () => local)
+  const lease = await session.acquireNoteOperation()
+  await assert.rejects(() => lease.write(noteKey(local), collection([{ id: 'legacy', text: 'after' }])))
+  await assert.rejects(() => lease.write(noteKey(branch), collection([{ id: 'legacy', text: 'branch after' }])))
+  assert.equal(session.view.notes[0].text, 'before')
+  reconciling = true
+  const reconcile = lease.reconcile()
+  await started.promise
+  assert.equal(session.view.notes[0].text, 'after')
+  assert.equal(session.view.ready, false)
+  assert.equal(session.view.dirty, false)
+  assert.deepEqual(readCollection(values.get(noteKey(local))).notes.map(note => note.text), ['after'])
+  release.resolve()
+  await reconcile
+  await lease.finish()
 })

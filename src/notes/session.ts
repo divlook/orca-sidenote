@@ -19,12 +19,14 @@ export interface NoteOperation {
   finish(): Promise<void>
 }
 type ScopeDraft = { value: NoteCollection; saved: NoteCollection; pending: number; error: string; revision: number; removed: Set<string> }
+type PendingSave = { key: string; draft: ScopeDraft; value: NoteCollection; revision: number; callers: number; promise: Promise<void> }
 
 export class NoteSession {
   private scopeDrafts = new Map<string, ScopeDraft>()
   private scopeKey = ''
   private generation = 0
   private writes = Promise.resolve()
+  private pendingTextSave: PendingSave | undefined
   private loading = false
   private checking = false
   private problem = ''
@@ -91,6 +93,7 @@ export class NoteSession {
     })
   }
   async assignLabel(expectedKey: string, labelId: string | null): Promise<void> {
+    this.pendingTextSave = undefined
     if (!this.ready || !this.labels.ready) return
     const key = this.scopeKey, draft = this.scopeDrafts.get(key)!, generation = this.generation
     if (!draft.value.notes.some(note => editorKey(key, note.id) === expectedKey)) return
@@ -179,6 +182,8 @@ export class NoteSession {
     if (prepared) await prepared.operation.finish()
   }
 
+  private projection: { key: string; value: NoteCollection | undefined; saved: NoteCollection | undefined; pending: number; error: string;
+    notes: (NoteCollection['notes'][number] & { key: string; pending: number; error: string; dirty: boolean })[]; dirty: boolean } | undefined
   constructor(private store: NoteStore, private changed: () => void) {}
   private get ready(): boolean {
     return this.scopeDrafts.has(this.scopeKey) && !this.loading && !this.checking && !this.problem && this.operation === null
@@ -186,16 +191,18 @@ export class NoteSession {
 
 
   get view() {
-    const draft = this.scopeDrafts.get(this.scopeKey)
-    const saved = new Map(draft?.saved.notes.map(note => [note.id, note.text]))
-    return { scopeKey: this.scopeKey, target: this.target,
-      ready: this.ready,
-      notes: (draft?.value.notes ?? []).map(note => ({ ...note, key: editorKey(this.scopeKey, note.id),
-        pending: draft?.pending ?? 0, error: draft?.error ?? '',
-        dirty: saved.get(note.id) !== note.text })),
-      pending: draft?.pending ?? 0, error: draft?.error ?? '', loading: this.loading, checking: this.checking,
-      problem: this.problem, dirty: !!draft && !sameCollection(draft.value, draft.saved), epoch: this.epoch,
-      invalidations: this.invalidations }
+    const draft = this.scopeDrafts.get(this.scopeKey), pending = draft?.pending ?? 0, error = draft?.error ?? ''
+    if (!this.projection || this.projection.key !== this.scopeKey || this.projection.value !== draft?.value
+      || this.projection.saved !== draft?.saved || this.projection.pending !== pending || this.projection.error !== error) {
+      const saved = new Map(draft?.saved.notes.map(note => [note.id, note.text]))
+      this.projection = { key: this.scopeKey, value: draft?.value, saved: draft?.saved, pending, error,
+        notes: (draft?.value.notes ?? []).map(note => ({ ...note, key: editorKey(this.scopeKey, note.id),
+          pending, error, dirty: saved.get(note.id) !== note.text })),
+        dirty: !!draft && !sameCollection(draft.value, draft.saved) }
+    }
+    return { scopeKey: this.scopeKey, target: this.target, ready: this.ready,
+      notes: this.projection.notes, pending, error, loading: this.loading, checking: this.checking,
+      problem: this.problem, dirty: this.projection.dirty, epoch: this.epoch, invalidations: this.invalidations }
   }
 
   private fail(error: unknown): void {
@@ -208,6 +215,7 @@ export class NoteSession {
   }
 
   async follow(resolveTarget: () => Promise<NoteTarget | null>): Promise<void> {
+    this.pendingTextSave = undefined
     this.resolveTarget = resolveTarget
     if (this.operation !== null) return
     this.checking = true
@@ -266,26 +274,36 @@ export class NoteSession {
     }
   }
 
-  private enqueue(key: string, draft: ScopeDraft): Promise<void> {
-    const value = draft.value
+  private enqueue(key: string, draft: ScopeDraft, textSave = false): Promise<void> {
     const revision = ++draft.revision
     draft.pending++
     draft.error = ''
-    this.changed()
-    this.writes = this.writes.then(async () => {
-      const snapshot = draft.removed.size ? collection(value.notes.filter(note => !draft.removed.has(note.id))) : value
+    const pending = this.pendingTextSave
+    if (textSave && pending?.key === key && pending.draft === draft) {
+      pending.value = draft.value
+      pending.revision = revision
+      pending.callers++
+      this.changed()
+      return pending.promise
+    }
+    const next: PendingSave = { key, draft, value: draft.value, revision, callers: 1, promise: this.writes }
+    this.pendingTextSave = textSave ? next : undefined
+    next.promise = this.writes = this.writes.then(async () => {
+      if (this.pendingTextSave === next) this.pendingTextSave = undefined
+      const snapshot = draft.removed.size ? collection(next.value.notes.filter(note => !draft.removed.has(note.id))) : next.value
       try {
         await this.store.set(key, snapshot as unknown as JsonValue)
         draft.saved = snapshot
-        if (revision === draft.revision) draft.error = ''
+        if (next.revision === draft.revision) draft.error = ''
       } catch (error) {
-        if (revision === draft.revision) draft.error = error instanceof Error ? error.message : String(error)
+        if (next.revision === draft.revision) draft.error = error instanceof Error ? error.message : String(error)
       } finally {
-        draft.pending--
+        draft.pending -= next.callers
         this.changed()
       }
     })
-    return this.writes
+    this.changed()
+    return next.promise
   }
 
   save(text: string, expectedKey: string): Promise<void> {
@@ -294,10 +312,11 @@ export class NoteSession {
     const note = draft.value.notes.find(note => editorKey(this.scopeKey, note.id) === expectedKey)
     if (!note) return Promise.resolve()
     draft.value = collection(draft.value.notes.map(item => item.id === note.id ? { ...item, text } : item))
-    return this.enqueue(this.scopeKey, draft)
+    return this.enqueue(this.scopeKey, draft, true)
   }
 
   async createNote(): Promise<string | undefined> {
+    this.pendingTextSave = undefined
     const key = this.scopeKey, draft = this.scopeDrafts.get(key)
     if (!draft || !this.ready) return
     const id = crypto.randomUUID()
@@ -308,6 +327,7 @@ export class NoteSession {
   }
 
   reorderNotes(ids: readonly string[]): Promise<void> {
+    this.pendingTextSave = undefined
     const draft = this.scopeDrafts.get(this.scopeKey)
     if (!draft || !this.ready) return Promise.resolve()
     if (ids.length !== draft.value.notes.length || new Set(ids).size !== ids.length
@@ -317,6 +337,7 @@ export class NoteSession {
   }
 
   retry(): Promise<void> {
+    this.pendingTextSave = undefined
     const draft = this.scopeDrafts.get(this.scopeKey)
     return draft && this.ready ? this.enqueue(this.scopeKey, draft) : Promise.resolve()
   }
@@ -330,6 +351,7 @@ export class NoteSession {
   }
 
   private async removeNote(id: string, onlyIfEmpty: boolean): Promise<void> {
+    this.pendingTextSave = undefined
     const key = this.scopeKey, draft = this.scopeDrafts.get(key), generation = this.generation
     if (!this.ready || !draft?.value.notes.some(note => note.id === id)) return
     draft.pending++
@@ -443,6 +465,7 @@ export class NoteSession {
   }
 
   async acquireNoteOperation(): Promise<NoteOperation> {
+    this.pendingTextSave = undefined
     if (this.operation) throw new Error('Another note operation is already open.')
     if (this.catalogBusy) throw new Error('Wait for the label catalog operation to finish.')
     const operation = { pending: 0 }

@@ -6,6 +6,12 @@ Removing a project or worktree does not delete its note collection. Reusing the 
 
 A recovery collection may exist only in panel memory. Back it up or copy its content before closing or reloading the panel. Do not edit or delete user storage keys or files for testing or recovery. Plan a migration before changing storage formats. Test it with isolated data.
 
+## Save notes
+
+Text edits update the full collection draft immediately. Consecutive text saves that have not started writing may share one storage attempt with the latest complete collection, including edits to different cards. Intermediate text snapshots may never reach storage. An in-flight write is unchanged. Creating, reordering, assigning labels, retrying, deleting or pruning a note, checking or changing focus, and acquiring an exclusive operation lease end the group; different scopes or draft instances never share it. Writes retain their global execution order.
+
+Every grouped save caller finishes only after the replacement attempt completes. As before, a text-save promise fulfills even if storage fails; the error remains in session state rather than rejecting the promise. Pending counts include all accepted callers until their attempt completes. The latest failed full draft remains visible and retryable, and an older completion cannot clear its error. Pending drafts exist only in panel memory until saved; copy or back them up before closing or reloading after an error.
+
 ## Label notes
 
 Each note can have one label or none. Select **+ Label** or the current label on a card to assign, replace, or clear it, including on minimized cards. Labels do not change note order or enforce a workflow.

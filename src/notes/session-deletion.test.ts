@@ -71,3 +71,29 @@ test('bulk deletion cleans an empty saved location without touching settings or 
   assert.equal(reopened.view.notes.length, 0)
   assert.equal(values.has(key), false)
 })
+
+test('cached views reflect each completed scope removal while a later deletion is pending', async () => {
+  const first = { hostId: 'local', path: '/first' }, second = { hostId: 'local', path: '/second' }
+  const values = new Map<string, unknown>([[noteKey(first), 'first'], [noteKey(second), 'second']])
+  const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  let session: NoteSession
+  const store: NoteStore = {
+    get: async key => values.get(key) ?? null,
+    keys: async () => [...values.keys()],
+    set: async (key, value) => { values.set(key, value) },
+    delete: async key => {
+      if (key === noteKey(first)) assert.equal(session.view.notes.length, 1)
+      if (key === noteKey(second)) { started.resolve(); await release.promise }
+      values.delete(key)
+    }
+  }
+  session = new NoteSession(store, () => {})
+  await session.follow(async () => first)
+  await session.prepareDeletion()
+  const deleting = session.deletePrepared()
+  await started.promise
+  assert.equal(session.view.notes.length, 0)
+  release.resolve()
+  await deleting
+  await session.finishDeletion()
+})

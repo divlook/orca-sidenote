@@ -25,6 +25,9 @@ export function createNoteCards(options: CardListOptions) {
     key: string; id: string; scope: string; node: HTMLElement; toolbar: HTMLElement; pending: HTMLElement; pinned: boolean; labelId?: string; body: HTMLElement; summary: HTMLElement; preview: HTMLElement;
     mode: HTMLButtonElement; collapse: HTMLButtonElement; trash: HTMLButtonElement; label: HTMLButtonElement; picker: HTMLElement; controls: HTMLButtonElement[];
     cancelBlur?: () => void; source?: SourceEditor; markdown: MarkdownPreview; reading: boolean; collapsed: boolean; error: string; text: string; summaryText?: string;
+    rendered?: { text: string; ready: boolean; epoch: number; invalidation: number | undefined; lineNumbers: boolean;
+      reading: boolean; collapsed: boolean; hidden: boolean; labelId: string | undefined;
+      labels: NoteSession['labels']; deleting: boolean; removing: boolean };
   }
   const cards = new Map<string, Card>()
   const removals = new Map<Card, Animation>()
@@ -59,7 +62,7 @@ export function createNoteCards(options: CardListOptions) {
   function writable(card?: Card) {
     const view = session.view
     // Hidden editors retain their state, but cannot accept stale queued actions.
-    return view.ready && preferences().ready && (!card || card.scope === view.scopeKey && !card.node.hidden && !card.error && !!card.source)
+    return view.ready && preferences().ready && (!card || card.scope === view.scopeKey && !card.node.hidden && !card.error)
   }
   function displayedIds() {
     return session.view.notes.filter(note => matchesFilter(options.filter(), note) || cards.get(note.key)?.pinned).map(note => note.id)
@@ -144,6 +147,23 @@ export function createNoteCards(options: CardListOptions) {
       })
     })
   }
+  function ensureSource(card: Card) {
+    if (!card.source && !card.error) {
+      try {
+        card.source = createSourceEditor(card.body, card.key, (key, text) => { void session.save(text, key).catch(report) }, error => {
+          card.error = error instanceof Error ? error.message : String(error)
+          render()
+        })
+        const view = session.view
+        card.source.sync(card.text, writable(card), view.epoch, view.invalidations.get(card.key))
+        card.source.setLineNumbers(preferences().lineNumbers)
+      } catch (error) {
+        card.error = error instanceof Error ? error.message : String(error)
+        render()
+      }
+    }
+    return card.source
+  }
   function makeCard(note: { id: string; key: string; text: string }, scope: string): Card {
     const node = document.createElement('section'); node.className = 'note-card'; node.dataset.noteId = note.id
     const toolbar = document.createElement('div'); toolbar.className = 'card-toolbar'; toolbar.draggable = true; toolbar.setAttribute('role', 'toolbar'); toolbar.setAttribute('aria-label', 'Note actions')
@@ -170,7 +190,7 @@ export function createNoteCards(options: CardListOptions) {
       markdown: createPreview(preview, href => openLink(href, card.scope, session.view.epoch), report, (key, text, marker, epoch) => {
         const current = session.view.notes.find(value => value.key === key)
         return writable(card) && card.reading && !card.collapsed && current?.text === text
-          && session.view.epoch === epoch && !!card.source?.toggleTask(key, text, marker, epoch)
+          && session.view.epoch === epoch && !!ensureSource(card)?.toggleTask(key, text, marker, epoch)
       })
     }
     cards.set(card.key, card)
@@ -263,14 +283,6 @@ export function createNoteCards(options: CardListOptions) {
       const displayed = new Set(displayedIds())
       void session.reorderNotes(reorderDisplayed(latest.map(value => value.id), displayed, moving, card.id, after)).catch(report)
     })
-    try {
-      card.source = createSourceEditor(body, card.key, (key, text) => { void session.save(text, key).catch(report) }, error => {
-        card.error = error instanceof Error ? error.message : String(error)
-        render()
-      })
-    } catch (error) {
-      card.error = error instanceof Error ? error.message : String(error)
-    }
     return card
   }
   function clearDropMarkers() {
@@ -312,6 +324,7 @@ export function createNoteCards(options: CardListOptions) {
   }
   let renderedEpoch = 0
   let renderedDefaultMode: 'editing' | 'reading' | undefined
+  let displayed = 0
   function reconcile(view: NoteView, preference: PreferenceView): void {
     if (disposed) return
     for (const control of bulkButtons) control.disabled = !view.ready || !preference.ready
@@ -343,8 +356,9 @@ export function createNoteCards(options: CardListOptions) {
       if (card.scope !== view.scopeKey || view.loading || !currentKeys.has(card.key)) {
         card.source?.sync(card.text, false, view.epoch, view.invalidations.get(card.key))
         card.markdown.suspend()
+        card.rendered = undefined
       }
-      card.node.hidden = card.scope !== view.scopeKey || view.loading || !currentKeys.has(card.key)
+      if (card.scope !== view.scopeKey || view.loading || !currentKeys.has(card.key)) card.node.hidden = true
     }
     let position = list.firstElementChild
     for (const note of view.notes) {
@@ -353,13 +367,27 @@ export function createNoteCards(options: CardListOptions) {
       const matches = matchesFilter(options.filter(), note)
       if (card.labelId !== note.labelId && !matches && (card.node.contains(document.activeElement) || dragging === card.id)) card.pinned = true
       card.labelId = note.labelId
-      card.text = note.text; card.node.hidden = view.loading || !matches && !card.pinned
-      card.pending.hidden = matches || !card.pinned
+      card.text = note.text
+      const hidden = view.loading || !matches && !card.pinned, pendingHidden = matches || !card.pinned
+      if (card.node.hidden !== hidden) card.node.hidden = hidden
+      if (card.pending.hidden !== pendingHidden) card.pending.hidden = pendingHidden
       if (card.node.hidden && !card.picker.hidden) { card.picker.hidden = true; card.label.setAttribute('aria-expanded', 'false') }
       while (position?.classList.contains('note-card-removing')) position = position.nextElementSibling
       if (position !== card.node) list.insertBefore(card.node, position)
       position = card.node.nextElementSibling
-      const ready = view.ready && preference.ready && !card.node.hidden && !card.error && !!card.source
+      if (view.ready && preference.ready && !card.node.hidden && !card.reading && !card.collapsed && !card.error) ensureSource(card)
+      const ready = view.ready && preference.ready && !card.node.hidden && !card.error
+      const labels = session.labels, previous = card.rendered, invalidation = view.invalidations.get(card.key)
+      const removing = emptyRemovals.has(card.key)
+      if (previous && previous.text === note.text && previous.ready === ready && previous.epoch === view.epoch
+        && previous.invalidation === invalidation && previous.lineNumbers === preference.lineNumbers
+        && previous.reading === card.reading && previous.collapsed === card.collapsed && previous.hidden === card.node.hidden
+        && previous.labelId === note.labelId && previous.labels.labels === labels.labels
+        && previous.labels.ready === labels.ready && previous.labels.busy === labels.busy
+        && previous.deleting === deleting && previous.removing === removing && focusNew !== card.key) continue
+      card.rendered = { text: note.text, ready, epoch: view.epoch, invalidation, lineNumbers: preference.lineNumbers,
+        reading: card.reading, collapsed: card.collapsed, hidden: card.node.hidden, labelId: note.labelId,
+        labels, deleting, removing }
       card.source?.sync(note.text, ready, view.epoch, view.invalidations.get(card.key))
       card.source?.setLineNumbers(preference.lineNumbers)
       for (const control of card.controls) control.disabled = !ready
@@ -396,7 +424,7 @@ export function createNoteCards(options: CardListOptions) {
         focusNew = undefined; card.node.scrollIntoView({ block: 'nearest' }); card.source?.show(true)
       }
     }
-    const displayed = view.notes.filter(note => !cards.get(note.key)?.node.hidden).length
+    displayed = view.notes.filter(note => !cards.get(note.key)?.node.hidden).length
     for (const control of bulkButtons) control.disabled ||= displayed === 0
   }
   async function removeNote() {
@@ -439,7 +467,7 @@ export function createNoteCards(options: CardListOptions) {
   deleteConfirm.addEventListener('click', confirmDeletion)
   return {
     render: reconcile,
-    get displayed() { return session.view.notes.filter(note => !cards.get(note.key)?.node.hidden).length },
+    get displayed() { return displayed },
     filterChoosing() {
       for (const card of cards.values()) { card.cancelBlur?.(); card.pinned = false }
     },

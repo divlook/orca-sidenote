@@ -14,6 +14,27 @@ export function generatedEOL(raw: string): string {
   return carriageReturns > breaks / 2 ? '\r\n' : '\n'
 }
 const lineCache = new WeakMap<EditorState, number[]>()
+const transactionLines = new WeakMap<Transaction, number[]>()
+function sourceLineIndex(starts: readonly number[], offset: number): number {
+  let from = 0, to = starts.length
+  while (from < to) {
+    const middle = Math.floor((from + to) / 2)
+    if (starts[middle] <= offset) from = middle + 1
+    else to = middle
+  }
+  return from - 1
+}
+function spliceLineStarts(raw: string, starts: readonly number[], from: number, to: number, text: string): number[] {
+  // Include neighboring lines so CR/LF pairs formed at either splice boundary are rescanned.
+  const first = Math.max(0, sourceLineIndex(starts, from) - 1)
+  const suffix = Math.min(starts.length, sourceLineIndex(starts, to) + 2)
+  const end = starts[suffix] ?? raw.length, beginning = starts[first]
+  const local = sourceLineStarts(raw.slice(beginning, from) + text + raw.slice(to, end))
+  const next = starts.slice(0, first), shift = text.length - (to - from)
+  for (let index = 0; index < local.length - (suffix < starts.length ? 1 : 0); index++) next.push(beginning + local[index])
+  for (let index = suffix; index < starts.length; index++) next.push(starts[index] + shift)
+  return next
+}
 function lineStarts(state: EditorState): number[] {
   let starts = lineCache.get(state)
   if (!starts) { starts = sourceLineStarts(state.field(sourceField)); lineCache.set(state, starts) }
@@ -27,7 +48,7 @@ export function documentPosition(state: EditorState, offset: number): number {
   const raw = state.field(sourceField)
   if (!Number.isSafeInteger(offset) || offset < 0 || offset > raw.length) throw new Error('Invalid source offset.')
   const starts = lineStarts(state)
-  const line = starts.findLastIndex(start => start <= offset)
+  const line = sourceLineIndex(starts, offset)
   const position = state.doc.line(line + 1).from + offset - starts[line]
   if (position > state.doc.line(line + 1).to) throw new Error('Source offset is inside a line separator.')
   return position
@@ -44,6 +65,7 @@ export const sourceField = StateField.define<string>({
   update(raw, transaction) {
     const restoration = transaction.effects.findLast(effect => effect.is(exactSource))
     if (!transaction.docChanged && !restoration) return raw
+    let updatedLines: number[] | undefined
     if (restoration) raw = restoration.value as string
     else if (transaction.docChanged) {
       const starts = lineStarts(transaction.startState)
@@ -54,12 +76,15 @@ export const sourceField = StateField.define<string>({
         splices.push({ from: starts[first.number - 1] + from - first.from,
           to: starts[last.number - 1] + to - last.from, text: inserted.toString().replaceAll('\n', eol) })
       })
+      updatedLines = starts
       for (let index = splices.length - 1; index >= 0; index--) {
         const splice = splices[index]
+        updatedLines = spliceLineStarts(raw, updatedLines, splice.from, splice.to, splice.text)
         raw = raw.slice(0, splice.from) + splice.text + raw.slice(splice.to)
       }
     }
     if (canonicalSource(raw) !== transaction.newDoc.toString()) throw new Error('The editor source text could not be verified.')
+    if (updatedLines) transactionLines.set(transaction, updatedLines)
     return raw
   }
 })
@@ -83,6 +108,8 @@ export function acceptSourceTransaction(transaction: Transaction, writable: bool
   if (transaction.annotation(Transaction.userEvent) === 'input.type.compose') throw new Error('The editor composition transaction was not isolated.')
   const previous = transaction.startState.field(sourceField)
   const candidate = transaction.state
+  const updatedLines = transactionLines.get(transaction)
+  if (updatedLines) lineCache.set(candidate, updatedLines)
   const sourceChanged = candidate.field(sourceField) !== previous
   if (!sourceChanged) {
     const cached = lineCache.get(transaction.startState)

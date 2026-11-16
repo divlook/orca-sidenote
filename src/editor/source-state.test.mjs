@@ -334,3 +334,50 @@ test('formatting and smart paste respect readiness read-only composition and lin
   f.command(view => pasteSource(view, 'https://example.com', true))
   assert.equal(f.raw, 'https://example.com\r\nend')
 })
+
+test('incremental raw indexes match fresh mixed-EOL UTF16 positions across edits and history', () => {
+  const f = fixture('🙂a\r\nb\rc\nlast\r\n')
+  const check = () => {
+    for (let offset = 0; offset <= f.raw.length; offset++) {
+      if (f.raw[offset - 1] === '\r' && f.raw[offset] === '\n') {
+        assert.throws(() => documentPosition(f.state, offset), /inside a line separator/)
+      } else {
+        const position = f.raw.slice(0, offset).replace(/\r\n|\r/g, '\n').length
+        assert.equal(documentPosition(f.state, offset), position)
+        assert.equal(rawPosition(f.state, position), offset)
+      }
+    }
+  }
+  check()
+  f.edit({ changes: { from: 0, to: 2, insert: '한\n' }, userEvent: 'input' }); check()
+  f.edit({ changes: { from: f.state.doc.line(2).to, to: f.state.doc.line(3).from }, userEvent: 'input' }); check()
+  f.edit({ changes: [{ from: 0, insert: 'Z\n' }, { from: f.state.doc.length, insert: '\n끝' }], userEvent: 'input' }); check()
+  f.edit({ selection: { anchor: 1 } }); check()
+  const accepted = f.raw
+  f.block()
+  f.edit({ changes: { from: 0, insert: 'rejected\n' }, userEvent: 'input' })
+  assert.equal(f.raw, accepted); check()
+  f.allow()
+  f.undo(); check()
+  f.redo(); assert.equal(f.raw, accepted); check()
+  f.edit({ changes: { from: 0, to: f.state.doc.length, insert: '' }, userEvent: 'input' }); check()
+  f.undo(); assert.equal(f.raw, accepted); check()
+})
+
+test('raw separator joins still fail canonical verification without poisoning cached positions', () => {
+  const f = fixture('a\rb')
+  assert.equal(rawPosition(f.state, 2), 2)
+  const before = f.state
+  assert.throws(() => f.edit({ changes: { from: 2, insert: '\n' }, effects: exactSource.of('a\r\nb') }), /source text could not be verified/)
+  assert.equal(f.state, before)
+  assert.equal(f.raw, 'a\rb')
+  f.edit({ changes: { from: 2, insert: '\n' }, userEvent: 'input' })
+  assert.equal(f.raw, 'a\r\r\nb')
+  assert.equal(rawPosition(f.state, 3), 4)
+  assert.throws(() => documentPosition(f.state, 3), /inside a line separator/)
+  f.edit({ changes: { from: 0, insert: '한🙂' }, userEvent: 'input' })
+  assert.equal(f.raw, '한🙂a\r\r\nb')
+  for (let position = 0; position <= f.state.doc.length; position++) {
+    assert.equal(documentPosition(f.state, rawPosition(f.state, position)), position)
+  }
+})

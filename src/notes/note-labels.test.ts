@@ -316,3 +316,33 @@ for (const action of ['reset', 'restore'] as const) {
     assert.deepEqual(session.labels.labels, readLabels(values.get(LABEL_KEY)))
   })
 }
+
+test('cached views reflect cleared assignments while a later scope write is pending', async () => {
+  const values = new Map<string, unknown>([
+    [noteKey(target), collection([{ id: 'active', text: 'active', labelId: id }])],
+    [noteKey(other), collection([{ id: 'other', text: 'other', labelId: id }])],
+    [LABEL_KEY, { version: 1, labels: DEFAULT_LABELS }]
+  ])
+  const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()
+  let session: NoteSession
+  const store: NoteStore = {
+    get: async key => values.get(key) ?? null,
+    keys: async () => [...values.keys()],
+    delete: async key => { values.delete(key) },
+    set: async (key, value) => {
+      if (key === noteKey(target)) assert.equal(session.view.notes[0].labelId, id)
+      if (key === noteKey(other)) { started.resolve(); await release.promise }
+      values.set(key, value)
+    }
+  }
+  session = new NoteSession(store, () => {})
+  await session.follow(async () => target)
+  await session.prepareLabelDeletion(id)
+  const deleting = session.deletePreparedLabels()
+  await started.promise
+  assert.equal(session.view.notes[0].labelId, undefined)
+  assert.equal(session.view.notes[0].text, 'active')
+  release.resolve()
+  await deleting
+  await session.finishLabelDeletion()
+})
