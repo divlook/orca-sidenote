@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.8.2
+
+### Patch Changes
+
+- 92fda84: Match Keyboard Shortcuts to Note Settings with a fixed header, a scrollable body, and a footer Close button. Share layout styles between the two dialogs while preserving keyboard navigation and settings behavior.
+
 ## 0.8.1
 
 ### Patch Changes
