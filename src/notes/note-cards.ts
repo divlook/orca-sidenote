@@ -330,6 +330,7 @@ export function createNoteCards(options: CardListOptions) {
     }
     const currentKeys = new Set(view.notes.map(note => note.key))
     for (const card of cards.values()) {
+      if (card.scope !== view.scopeKey) card.pinned = false
       if (removals.has(card)) {
         if (card.scope !== view.scopeKey || view.loading || currentKeys.has(card.key)) disposeCard(card)
         else continue
@@ -454,7 +455,7 @@ export function createNoteCards(options: CardListOptions) {
     },
     scopeChanging() {
       ++focusGeneration
-      for (const card of cards.values()) { card.cancelBlur?.(); card.pinned = false }
+      for (const card of cards.values()) card.cancelBlur?.()
       clearDrag()
       if (deleteDialog.open) { deletion = undefined; deleteDialog.close() }
     },

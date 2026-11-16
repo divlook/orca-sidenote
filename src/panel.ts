@@ -65,7 +65,7 @@ function render(): void {
   filterView.render(session.labels.labels, session.labels.ready, view.ready, cards.displayed, view.notes.length)
   labelSettings.render()
   const target = view.target, basename = target?.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || target?.path
-  locationLabel.textContent = view.loading ? 'Switching…' : view.problem ? 'Location unavailable'
+  locationLabel.textContent = view.loading || view.checking && !target ? 'Switching…' : view.problem ? 'Location unavailable'
     : target ? `${target.project ?? basename} · ${target.worktree ?? basename}${target.hostId && target.hostId !== 'local' ? ` · ${target.hostId}` : ''}` : 'No active worktree'
   locationLabel.title = !view.loading && target ? `${target.hostId ?? 'local'}: ${target.path}` : ''
   problem.textContent = [preferences.problem, view.problem, view.error, session.labels.error, filters.view.error, cards.problem, externalError].filter(Boolean).join(' ')
@@ -73,7 +73,7 @@ function render(): void {
   const writable = view.ready && preferences.ready
   retry.hidden = !view.error; retry.disabled = !writable || view.pending > 0
   for (const add of addButtons) add.disabled = !writable
-  panel.setAttribute('aria-busy', String(view.loading || !preferences.ready))
+  panel.setAttribute('aria-busy', String(view.loading || view.checking || !preferences.ready))
 }
 for (const add of addButtons) add.addEventListener('click', () => { void cards.addNote().catch(report) })
 retry.addEventListener('click', () => { void session.retry().catch(report) })

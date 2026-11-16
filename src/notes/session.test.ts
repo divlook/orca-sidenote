@@ -111,15 +111,100 @@ test('late loads and target lookups cannot replace newer focus or newly typed ca
   assert.equal(session.view.notes[0].text, 'newly typed')
   for (const reject of [false, true]) {
     const lookup = Promise.withResolvers<NoteTarget | null>()
+    const before = session.view
     const following = session.follow(() => lookup.promise)
-    assert.equal(session.view.scopeKey, '')
-    assert.equal(session.view.target, null)
-    assert.equal(session.view.notes.length, 0)
+    assert.equal(session.view.scopeKey, before.scopeKey)
+    assert.deepEqual(session.view.target, before.target)
+    assert.deepEqual(session.view.notes, before.notes)
+    assert.equal(session.view.ready, false)
     await session.follow(async () => branch)
     if (reject) lookup.reject(new Error('old lookup failed'))
     else lookup.resolve(local)
     await following
     assert.deepEqual(session.view.target, branch)
+  }
+})
+
+test('same-scope focus checks retain displayed drafts and block edits until confirmed', async () => {
+  const { store, values } = memoryStore({ [noteKey(local)]: collection([{ id: 'note', text: 'original' }]) })
+  const views: NoteSession['view'][] = []
+  const session = new NoteSession(store, () => views.push(session.view))
+  await session.follow(async () => local)
+  const card = session.view.notes[0].key
+  await session.save('draft', card)
+  views.length = 0
+  const lookup = Promise.withResolvers<NoteTarget | null>()
+  const following = session.follow(() => lookup.promise)
+  assert.equal(session.view.ready, false)
+  assert.equal(session.view.checking, true)
+  await session.save('blocked', card)
+  assert.equal(await session.createNote(), undefined)
+  await session.deleteNote('note')
+  assert.deepEqual(texts(values, local), ['draft'])
+  lookup.resolve({ ...local, project: 'Renamed project' })
+  await following
+  assert.equal(session.view.ready, true)
+  assert.equal(session.view.checking, false)
+  assert.equal(session.view.target?.project, 'Renamed project')
+  for (const view of views) {
+    assert.equal(view.scopeKey, noteKey(local))
+    assert.equal(view.loading, false)
+    assert.deepEqual(view.notes.map(note => [note.key, note.text]), [[card, 'draft']])
+  }
+  await session.save('confirmed edit', card)
+  assert.deepEqual(texts(values, local), ['confirmed edit'])
+})
+
+test('only the latest focus check unlocks cards and confirmed host switches hide the old scope', async () => {
+  const { store, values } = memoryStore({ [noteKey(local)]: 'local note' })
+  const stored = Promise.withResolvers<unknown>(), started = Promise.withResolvers<void>()
+  const session = new NoteSession({ ...store, get: key => {
+    if (key === noteKey(remote)) { started.resolve(); return stored.promise }
+    return store.get(key)
+  } }, () => {})
+  await session.follow(async () => local)
+  const card = session.view.notes[0].key
+  const older = Promise.withResolvers<NoteTarget | null>(), latest = Promise.withResolvers<NoteTarget | null>()
+  const first = session.follow(() => older.promise)
+  const second = session.follow(() => latest.promise)
+  older.resolve(local); await first
+  assert.equal(session.view.ready, false)
+  assert.equal(session.view.scopeKey, noteKey(local))
+  assert.equal(session.view.notes[0].text, 'local note')
+  latest.resolve(remote)
+  await started.promise
+  assert.equal(session.view.scopeKey, noteKey(remote))
+  assert.equal(session.view.loading, true)
+  assert.equal(session.view.ready, false)
+  assert.equal(session.view.notes.length, 0)
+  await session.save('stale edit', card)
+  stored.resolve('remote note'); await second
+  assert.equal(session.view.ready, true)
+  assert.equal(session.view.notes[0].text, 'remote note')
+  assert.deepEqual(texts(values, local), ['local note'])
+})
+
+test('missing or rejected focus checks clear retained cards and remain read-only', async () => {
+  for (const missing of [true, false]) {
+    const { store, values } = memoryStore({ [noteKey(local)]: 'retained note' })
+    const session = new NoteSession(store, () => {})
+    await session.follow(async () => local)
+    const card = session.view.notes[0].key
+    const lookup = Promise.withResolvers<NoteTarget | null>()
+    const following = session.follow(() => lookup.promise)
+    assert.equal(session.view.notes[0].text, 'retained note')
+    if (missing) lookup.resolve(null)
+    else lookup.reject(new Error('ambiguous or unavailable focus'))
+    await following
+    assert.equal(session.view.ready, false)
+    assert.equal(session.view.checking, false)
+    assert.equal(session.view.loading, false)
+    assert.equal(session.view.scopeKey, '')
+    assert.equal(session.view.target, null)
+    assert.deepEqual(session.view.notes, [])
+    assert.equal(session.view.problem, missing ? '' : 'ambiguous or unavailable focus')
+    await session.save('stale edit', card)
+    assert.deepEqual(texts(values, local), ['retained note'])
   }
 })
 

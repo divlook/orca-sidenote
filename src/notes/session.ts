@@ -26,6 +26,7 @@ export class NoteSession {
   private generation = 0
   private writes = Promise.resolve()
   private loading = false
+  private checking = false
   private problem = ''
   private target: NoteTarget | null = null
   private deletion: string[] | null = null
@@ -180,7 +181,7 @@ export class NoteSession {
 
   constructor(private store: NoteStore, private changed: () => void) {}
   private get ready(): boolean {
-    return this.scopeDrafts.has(this.scopeKey) && !this.loading && !this.problem && this.operation === null
+    return this.scopeDrafts.has(this.scopeKey) && !this.loading && !this.checking && !this.problem && this.operation === null
   }
 
 
@@ -192,24 +193,16 @@ export class NoteSession {
       notes: (draft?.value.notes ?? []).map(note => ({ ...note, key: editorKey(this.scopeKey, note.id),
         pending: draft?.pending ?? 0, error: draft?.error ?? '',
         dirty: saved.get(note.id) !== note.text })),
-      pending: draft?.pending ?? 0, error: draft?.error ?? '', loading: this.loading,
+      pending: draft?.pending ?? 0, error: draft?.error ?? '', loading: this.loading, checking: this.checking,
       problem: this.problem, dirty: !!draft && !sameCollection(draft.value, draft.saved), epoch: this.epoch,
       invalidations: this.invalidations }
-  }
-
-  private suspend(): void {
-    this.scopeKey = ''
-    this.target = null
-    ++this.generation
-    this.loading = true
-    this.problem = ''
-    this.changed()
   }
 
   private fail(error: unknown): void {
     this.scopeKey = ''
     this.target = null
     this.loading = false
+    this.checking = false
     this.problem = error instanceof Error ? error.message : String(error)
     this.changed()
   }
@@ -217,7 +210,10 @@ export class NoteSession {
   async follow(resolveTarget: () => Promise<NoteTarget | null>): Promise<void> {
     this.resolveTarget = resolveTarget
     if (this.operation !== null) return
-    this.suspend()
+    this.checking = true
+    ++this.generation
+    this.problem = ''
+    this.changed()
     const generation = this.generation
     try {
       const target = await resolveTarget()
@@ -230,13 +226,14 @@ export class NoteSession {
   private async focus(target: NoteTarget | null): Promise<void> {
     const generation = ++this.generation
     const epoch = this.loadEpoch
+    const key = target ? noteKey(target) : ''
+    this.loading = !!target && (key !== this.scopeKey || this.loading)
     this.target = target
-    this.scopeKey = target ? noteKey(target) : ''
-    this.loading = !!target
+    this.scopeKey = key
     this.problem = ''
+    if (!target) this.checking = false
     this.changed()
     if (!target) return
-    const key = this.scopeKey
     try {
       if (this.unknownWrites.has(key)) {
         await this.reconcileUnknownWrites([key], generation)
@@ -252,6 +249,7 @@ export class NoteSession {
     } finally {
       if (generation === this.generation) {
         this.loading = false
+        this.checking = false
         this.changed()
       }
     }
