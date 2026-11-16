@@ -100,6 +100,29 @@ test('only the Paste info icon reveals its description and never invokes Paste',
   } finally { f.restore() }
 })
 
+test('unavailable entries without a handler preserve help and executable menu actions', () => {
+  const f = fixture()
+  try {
+    let selections = 0
+    const menu = createContextMenu(f.owner, () => [
+      { label: 'Paste', disabled: true, tooltip: 'Use Cmd+V to paste.' },
+      { label: 'Select All', run: () => selections++ }
+    ])
+    context(f.owner)
+    const node = f.owner.children.find(child => child.attributes.get('role') === 'menu')
+    const [row, selectAll] = node.children, [paste, info, tooltip] = row.children
+    assert.equal(paste.disabled, true)
+    paste.click(); info.focus(); info.dispatchEvent(new Event('focus'))
+    assert.equal(node.hidden, false)
+    assert.equal(tooltip.style.visibility, 'visible')
+    assert.equal(f.document.activeElement, info)
+    selectAll.click()
+    assert.equal(selections, 1)
+    assert.equal(node.hidden, true)
+    menu.dispose()
+  } finally { f.restore() }
+})
+
 test('failed Markdown copy restores focus and selected text without treating missing native data as success', () => {
   const f = fixture()
   try {

@@ -22,7 +22,8 @@ function fixture(initial: [string, unknown][] = []) {
 test('v2 backup preserves IDs, order, empty cards, exact text and legacy v1 imports as one note', () => {
   const expected = { format: 'orca-sidenote-notes', version: 3, labels: [], notes: [first, second],
     recoveryDrafts: [{ ...first, notes: [] }] }
-  assert.deepEqual(decodeArchive(encodeArchive(archive(expected.notes, expected.recoveryDrafts))), expected)
+  assert.deepEqual(decodeArchive(new TextEncoder().encode(JSON.stringify(expected))), expected)
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(encodeArchive(archive(expected.notes, expected.recoveryDrafts)))), expected)
   const fixture = '{"format":"orca-sidenote-notes","version":2,"notes":[{"hostId":null,"path":"/fixture","notes":[{"id":"n","text":"line\\r\\nnext"}]}],"recoveryDrafts":[]}'
   const independentlyAuthored = { format: 'orca-sidenote-notes', version: 3, labels: [], notes: [
     { hostId: null, path: '/fixture', notes: [{ id: 'n', text: 'line\r\nnext' }] }

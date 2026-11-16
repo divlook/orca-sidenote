@@ -98,7 +98,6 @@ export class NoteSession {
     const key = this.scopeKey, draft = this.scopeDrafts.get(key)!, generation = this.generation
     if (!draft.value.notes.some(note => editorKey(key, note.id) === expectedKey)) return
     if (labelId !== null && !this.catalog.some(label => label.id === labelId)) throw new Error('The label no longer exists.')
-    // Persist defaults before the first assignment so a failed catalog write cannot create dangling references.
     this.catalogBusy = true; this.changed()
     try {
       const current = readLabels(await this.store.get(LABEL_KEY))

@@ -10,9 +10,9 @@ type LinkOptions = {
   internal(scope: string, href: string): Promise<unknown>
   report(error: unknown): void
 }
-export function bindNoteLinks(options: LinkOptions) {
-  const dialog = document.querySelector<HTMLDialogElement>('#open-note-link')!
-  const cancel = document.querySelector<HTMLButtonElement>('#open-note-link-cancel')!
+export function bindNoteLinks(dialog: HTMLDialogElement, options: LinkOptions) {
+  const cancel = dialog.querySelector<HTMLButtonElement>('#open-note-link-cancel')!
+  const events = new AbortController(), signal = events.signal
   let captured: CapturedLink | undefined
   let opener: HTMLElement | null = null
   const disposeDialog = bindDialogControls(dialog, cancel, { canClose: () => true, returnFocus: () => opener })
@@ -30,14 +30,13 @@ export function bindNoteLinks(options: LinkOptions) {
     await options.internal(link.scope, link.href)
   }
   for (const [id, action] of [['open-note-link-external', external], ['open-note-link-orca', internal]] as const) {
-    document.querySelector<HTMLButtonElement>('#' + id)!.addEventListener('click', () => {
+    dialog.querySelector<HTMLButtonElement>('#' + id)!.addEventListener('click', () => {
       const link = captured
       if (!link) return
-      // Closing never defers the bridge call out of this gesture.
       dialog.close()
       void action(link).catch(options.report)
       captured = undefined
-    })
+    }, { signal })
   }
   return {
     async open(href: string, scope: string, epoch: number) {
@@ -52,10 +51,10 @@ export function bindNoteLinks(options: LinkOptions) {
       if (preference.webLinkOpening === 'orca') return internal(link)
       captured = link
       opener = link.opener
-      document.querySelector<HTMLElement>('#open-note-link-url')!.textContent = href
+      dialog.querySelector<HTMLElement>('#open-note-link-url')!.textContent = href
       dialog.showModal(); cancel.focus()
     },
     scopeChanging() { captured = undefined; if (dialog.open) dialog.close() },
-    dispose() { this.scopeChanging(); disposeDialog() }
+    dispose() { this.scopeChanging(); events.abort(); disposeDialog() }
   }
 }

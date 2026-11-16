@@ -95,9 +95,12 @@ test('backup contains full ordered catalog and labeled recovery; restore imports
   const { session, values } = fixture({ [LABEL_KEY]: { version: 1, labels: destination } })
   const transfer = new NotesTransfer(session)
   await transfer.beginTransfer()
-  const incoming = archive([{ ...target, notes: [{ id: 'one', text: 'one', labelId: 'x' },
-    { id: 'two', text: 'two', labelId: 'b' }, { id: 'three', text: '', labelId: 'd' }] }], [], labels)
-  assert.deepEqual(decodeArchive(encodeArchive(incoming)), incoming)
+  const notes = [{ ...target, notes: [{ id: 'one', text: 'one', labelId: 'x' },
+    { id: 'two', text: 'two', labelId: 'b' }, { id: 'three', text: '', labelId: 'd' }] }]
+  const incoming = archive(notes, [], labels)
+  const expected = { format: 'orca-sidenote-notes', version: 3, labels, notes, recoveryDrafts: [] }
+  assert.deepEqual(decodeArchive(new TextEncoder().encode(JSON.stringify(expected))), expected)
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(encodeArchive(incoming))), expected)
   const plan = await transfer.previewRestore(incoming, [{ key: noteKey(target), source: 'notes', replace: false }])
   assert.deepEqual(plan.labels.map(label => label.name), ['bug', 'DONE', 'bug (2)', 'Bug (3)', 'New'])
   await transfer.commitRestore(plan, false)

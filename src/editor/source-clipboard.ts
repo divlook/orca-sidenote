@@ -1,6 +1,6 @@
 import { EditorSelection, type EditorState } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
-import { rawEdit, sourceEOL, rawPosition, sourceField } from './source-state'
+import { rawEdit, sourceEOL, sourceSlice } from './source-state'
 import { escapeLinkLabel, ordinaryLinkLabel } from './source-formatting'
 
 export type SourceClipboard = { copied?: { text: string; linewise: boolean } }
@@ -15,8 +15,8 @@ export function selectedSource(state: EditorState) {
     if (previous && range.from <= previous.to) previous.to = Math.max(previous.to, range.to)
     else ranges.push({ from: range.from, to: range.to })
   }
-  const raw = state.field(sourceField), eol = state.facet(sourceEOL)
-  let text = ranges.map(range => raw.slice(rawPosition(state, range.from), rawPosition(state, range.to))).join(linewise ? '' : eol)
+  const eol = state.facet(sourceEOL)
+  let text = ranges.map(range => sourceSlice(state, range.from, range.to)).join(linewise ? '' : eol)
   if (linewise && !/[\r\n]$/.test(text)) text += eol
   return { ranges, text, linewise }
 }
@@ -27,7 +27,7 @@ export function pasteSource(view: EditorView, text: string, linewise = false, se
   const pieces = text.split(/\r\n|\r|\n/)
   let url = false
   if (!linewise && /^https?:\/\/[^\s<>\\]+$/i.test(text)) {
-    try { url = !!new URL(text).hostname } catch { /* Ordinary paste retains invalid URLs exactly. */ }
+    try { url = !!new URL(text).hostname } catch {}
   }
   // Marked emits href ampersands verbatim; encode them for the DOM's entity
   // decoding. Backslash escapes protect Markdown parentheses and table pipes.

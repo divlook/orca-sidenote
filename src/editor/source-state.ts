@@ -25,7 +25,6 @@ function sourceLineIndex(starts: readonly number[], offset: number): number {
   return from - 1
 }
 function spliceLineStarts(raw: string, starts: readonly number[], from: number, to: number, text: string): number[] {
-  // Include neighboring lines so CR/LF pairs formed at either splice boundary are rescanned.
   const first = Math.max(0, sourceLineIndex(starts, from) - 1)
   const suffix = Math.min(starts.length, sourceLineIndex(starts, to) + 2)
   const end = starts[suffix] ?? raw.length, beginning = starts[first]
@@ -43,6 +42,9 @@ function lineStarts(state: EditorState): number[] {
 export function rawPosition(state: EditorState, position: number): number {
   const line = state.doc.lineAt(position)
   return lineStarts(state)[line.number - 1] + position - line.from
+}
+export function sourceSlice(state: EditorState, from: number, to: number): string {
+  return state.field(sourceField).slice(rawPosition(state, from), rawPosition(state, to))
 }
 export function documentPosition(state: EditorState, offset: number): number {
   const raw = state.field(sourceField)
@@ -100,8 +102,6 @@ export function sourceExtensions(raw: string): Extension {
       ? { annotations: isolateHistory.of('full') } : null)]
 }
 
-// Always finish the candidate transaction, then undo it through public history.
-// Callers publish only the accepted result. No asynchronous rollback can hit another note.
 export function acceptSourceTransaction(transaction: Transaction, writable: boolean): { state: EditorState; rejected: boolean; restoration?: Transaction } {
   // filter:false is public. Fail closed before inspecting a candidate whose
   // unisolated composition history could have joined an earlier accepted edit.

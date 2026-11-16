@@ -2,7 +2,7 @@ import { EditorSelection, StateEffect, StateField, type EditorState } from '@cod
 import { type Command, type EditorView } from '@codemirror/view'
 import { getSearchQuery, SearchQuery, searchPanelOpen } from '@codemirror/search'
 import { markdownListItemLines } from '../markdown/markdown-list'
-import { sourceEOL, rawPosition, sourceField, rawEdit } from './source-state'
+import { sourceEOL, sourceSlice, rawEdit } from './source-state'
 import { canonicalSource } from '../source-text'
 
 export function listEnter(view: EditorView): boolean {
@@ -113,13 +113,13 @@ export function lineOperation(direction: -1 | 1, copy: boolean): Command {
       if (previous && first <= previous.last + 1) previous.last = Math.max(previous.last, last)
       else blocks.push({ first, last })
     }
-    const raw = state.field(sourceField), eol = state.facet(sourceEOL)
+    const eol = state.facet(sourceEOL)
     const edits: { from: number; to: number; insert: string }[] = []
     const shifts: { from: number; to: number; delta: number }[] = []
     for (const block of blocks) {
       const first = state.doc.line(block.first), last = state.doc.line(block.last)
       if (copy) {
-        const body = raw.slice(rawPosition(state, first.from), rawPosition(state, last.to))
+        const body = sourceSlice(state, first.from, last.to)
         const at = direction < 0 ? first.from : last.to
         edits.push({ from: at, to: at, insert: direction < 0 ? body + eol : eol + body })
         shifts.push({ from: first.from, to: last.to, delta: direction < 0 ? 0 : canonicalSource(body).length + 1 })
@@ -127,9 +127,9 @@ export function lineOperation(direction: -1 | 1, copy: boolean): Command {
         if (direction < 0 && block.first === 1 || direction > 0 && block.last === state.doc.lines) continue
         const adjacent = state.doc.line(direction < 0 ? block.first - 1 : block.last + 1)
         const from = direction < 0 ? adjacent.from : first.from, to = direction < 0 ? last.to : adjacent.to
-        const body = raw.slice(rawPosition(state, first.from), rawPosition(state, last.to))
-        const neighbor = raw.slice(rawPosition(state, adjacent.from), rawPosition(state, adjacent.to))
-        const separator = direction < 0 ? raw.slice(rawPosition(state, adjacent.to), rawPosition(state, first.from)) : raw.slice(rawPosition(state, last.to), rawPosition(state, adjacent.from))
+        const body = sourceSlice(state, first.from, last.to)
+        const neighbor = sourceSlice(state, adjacent.from, adjacent.to)
+        const separator = direction < 0 ? sourceSlice(state, adjacent.to, first.from) : sourceSlice(state, last.to, adjacent.from)
         edits.push({ from, to, insert: direction < 0 ? body + separator + neighbor : neighbor + separator + body })
         shifts.push({ from: first.from, to: last.to, delta: (neighbor.length + 1) * direction })
       }

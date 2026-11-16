@@ -109,7 +109,7 @@ test('web preference defaults independently, rolls back, retries and preserves n
   let fail = false
   const store = { get: async (key: string) => values.get(key) ?? null, set: async (key: string, value: unknown) => { if (fail) throw new Error('write failed'); values.set(key, value) } }
   const preferences = new NotePreferences(store, () => {})
-  await preferences.loaded
+  await preferences.initialize()
   assert.equal(preferences.view.webLinkOpening, 'external')
   await preferences.chooseWebLinkOpening('ask')
   fail = true; await preferences.chooseWebLinkOpening('orca')
@@ -118,6 +118,6 @@ test('web preference defaults independently, rolls back, retries and preserves n
   assert.equal(values.get(WEB_LINK_OPENING_KEY), 'orca')
   assert.equal(values.get('note:v1:synthetic'), 'untouched')
   values.set(WEB_LINK_OPENING_KEY, 'invalid')
-  const invalid = new NotePreferences(store, () => {}); await invalid.loaded
+  const invalid = new NotePreferences(store, () => {}); await invalid.initialize()
   assert.equal(invalid.view.webLinksReady, false); assert.equal(invalid.view.ready, true)
 })

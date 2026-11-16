@@ -10,14 +10,19 @@ export class NotePreferences {
   private webLinks: Preference<WebLinkOpening> = { value: 'external', saved: 'external', ready: false, problem: '', revision: 0 }
   private initialized = false
   private writes = Promise.resolve()
-  readonly loaded: Promise<void>
-  constructor(private store: SettingsStore, private changed: () => void) {
-    this.loaded = Promise.all([
-      this.load(this.confirmation, () => loadConfirmNoteDeletion(store), 'Change note deletion confirmation to replace it.'),
-      this.load(this.numbers, () => loadSourceLineNumbers(store), 'Change Source line numbers to replace it.'),
-      this.load(this.defaultMode, () => loadDefaultNoteMode(store), 'Change default note mode to replace it.'),
-      this.load(this.webLinks, () => loadWebLinkOpening(store), 'Change web link opening to replace it.')
-    ]).then(() => { this.initialized = true; this.changed() })
+  private loading: Promise<void> | undefined
+  constructor(private store: SettingsStore, private changed: () => void) {}
+  initialize(): Promise<void> {
+    if (this.loading) return this.loading
+    let resolve!: () => void, reject!: (reason: unknown) => void
+    this.loading = new Promise<void>((complete, fail) => { resolve = complete; reject = fail })
+    void Promise.all([
+      this.load(this.confirmation, () => loadConfirmNoteDeletion(this.store), 'Change note deletion confirmation to replace it.'),
+      this.load(this.numbers, () => loadSourceLineNumbers(this.store), 'Change Source line numbers to replace it.'),
+      this.load(this.defaultMode, () => loadDefaultNoteMode(this.store), 'Change default note mode to replace it.'),
+      this.load(this.webLinks, () => loadWebLinkOpening(this.store), 'Change web link opening to replace it.')
+    ]).then(() => { this.initialized = true; this.changed() }).then(resolve, reject)
+    return this.loading
   }
   private async load<T>(preference: Preference<T>, read: () => Promise<T>, recovery: string) {
     try { preference.saved = preference.value = await read(); preference.ready = true }
@@ -31,7 +36,7 @@ export class NotePreferences {
       problem: [this.confirmation.problem, this.numbers.problem, this.defaultMode.problem, this.webLinks.problem].filter(Boolean).join(' ') }
   }
   private choose<T>(preference: Preference<T>, value: T, save: (store: SettingsStore, value: T) => Promise<void>): Promise<void> {
-    if (!this.initialized) return this.loaded.then(() => this.choose(preference, value, save))
+    if (!this.initialized) return this.initialize().then(() => this.choose(preference, value, save))
     preference.value = value
     const revision = ++preference.revision
     this.changed()

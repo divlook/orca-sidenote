@@ -2,12 +2,16 @@ import type { LabelColor } from '../notes/note-labels'
 
 type Choice<T extends string> = { value: T; label: string; color?: LabelColor }
 type Binding<T extends string> = { name: string | (() => string); options: readonly Choice<T>[]; selected: () => T; choose: (value: T) => void }
+export type SettingsDropdownBinding = { render(): void; dispose(): void }
 export type SettingsDropdown = {
-  bind<T extends string>(trigger: HTMLButtonElement, binding: Binding<T>): { render(): void }
+  bind<T extends string>(trigger: HTMLButtonElement, binding: Binding<T>): SettingsDropdownBinding
   close(focus?: boolean): boolean
+  dispose(): void
 }
 
 export function createSettingsDropdown(dialog: HTMLDialogElement, body: HTMLElement): SettingsDropdown {
+  const events = new AbortController(), signal = events.signal
+  const bindings = new Set<AbortController>()
   const menu = document.createElement('div')
   menu.id = 'settings-dropdown-menu'; menu.className = 'settings-dropdown-menu'; menu.hidden = true
   menu.setAttribute('role', 'menu'); dialog.append(menu)
@@ -27,9 +31,12 @@ export function createSettingsDropdown(dialog: HTMLDialogElement, body: HTMLElem
     children.push(document.createTextNode(choice.label)); element.replaceChildren(...children)
   }
   function bind<T extends string>(trigger: HTMLButtonElement, binding: Binding<T>) {
+    const events = new AbortController(), signal = events.signal
+    bindings.add(events)
     trigger.classList.add('settings-dropdown-trigger'); trigger.setAttribute('aria-haspopup', 'menu')
     trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', menu.id)
     function render() {
+      if (signal.aborted) return
       const choice = binding.options.find(option => option.value === binding.selected())!
       display(trigger, choice)
       const name = typeof binding.name === 'function' ? binding.name() : binding.name
@@ -43,7 +50,7 @@ export function createSettingsDropdown(dialog: HTMLDialogElement, body: HTMLElem
       for (const option of binding.options) {
         const choice = document.createElement('button'); choice.type = 'button'; choice.setAttribute('role', 'menuitemradio')
         choice.setAttribute('aria-checked', String(option.value === binding.selected())); display(choice, option)
-        choice.addEventListener('click', () => { binding.choose(option.value); render(); close() })
+        choice.addEventListener('click', () => { binding.choose(option.value); render(); close() }, { signal })
         menu.append(choice)
       }
       menu.hidden = false; trigger.setAttribute('aria-expanded', 'true')
@@ -56,12 +63,12 @@ export function createSettingsDropdown(dialog: HTMLDialogElement, body: HTMLElem
       menu.style.top = `${Math.max(top, Math.min(bounds.bottom, bottom - menu.offsetHeight))}px`
       menu.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus({ preventScroll: true })
     }
-    trigger.addEventListener('click', open)
+    trigger.addEventListener('click', open, { signal })
     trigger.addEventListener('keydown', event => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); if (active !== trigger) open() }
-    })
+    }, { signal })
     render()
-    return { render }
+    return { render, dispose() { events.abort(); bindings.delete(events); if (active === trigger) close(false) } }
   }
   menu.addEventListener('keydown', event => {
     if (event.key === 'Tab' && active) {
@@ -76,11 +83,11 @@ export function createSettingsDropdown(dialog: HTMLDialogElement, body: HTMLElem
     const choices = [...menu.querySelectorAll<HTMLButtonElement>('button')], index = choices.indexOf(document.activeElement as HTMLButtonElement)
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + choices.length) % choices.length
     choices[next]?.focus()
-  })
-  menu.addEventListener('focusout', () => { requestAnimationFrame(() => { if (active && !menu.contains(document.activeElement) && document.activeElement !== active) close(false) }) })
-  document.addEventListener('pointerdown', event => { if (active && !menu.contains(event.target as Node) && !active.contains(event.target as Node)) close(false) })
-  body.addEventListener('scroll', () => close(false))
-  dialog.addEventListener('close', () => close(false))
-  window.addEventListener('resize', () => close(false))
-  return { bind, close }
+  }, { signal })
+  menu.addEventListener('focusout', () => { requestAnimationFrame(() => { if (active && !menu.contains(document.activeElement) && document.activeElement !== active) close(false) }) }, { signal })
+  document.addEventListener('pointerdown', event => { if (active && !menu.contains(event.target as Node) && !active.contains(event.target as Node)) close(false) }, { signal })
+  body.addEventListener('scroll', () => close(false), { signal })
+  dialog.addEventListener('close', () => close(false), { signal })
+  window.addEventListener('resize', () => close(false), { signal })
+  return { bind, close, dispose() { close(false); events.abort(); for (const binding of bindings) binding.abort(); bindings.clear(); menu.remove() } }
 }

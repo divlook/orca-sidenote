@@ -4,7 +4,7 @@ import { historyKeymap, indentWithTab, selectAll, standardKeymap } from '@codemi
 import { search, searchKeymap } from '@codemirror/search'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import type { TaskMarker } from '../markdown/markdown-tasks'
-import { acceptSourceTransaction, documentPosition, exactSource, rawEdit, rawPosition, sourceEOL, sourceExtensions, sourceField } from './source-state'
+import { acceptSourceTransaction, documentPosition, exactSource, rawEdit, sourceSlice, sourceEOL, sourceExtensions, sourceField } from './source-state'
 import { occurrenceSession } from './source-commands'
 import { pasteSource, selectedSource, type SourceClipboard } from './source-clipboard'
 import { changeAllOccurrences, sourceKeymap } from './source-actions'
@@ -26,10 +26,11 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
   let enabled = false, disposed = false, broken = false, initialized = false
   let epoch = 0, invalidation = 0, revision = 0, visibleNumbers = true
   const clipboard: SourceClipboard = {}
-  let menuCopy: { state: EditorState; confirmed: boolean } | undefined
+  let menuCopy: { state: EditorState; current: () => boolean; confirmed: boolean } | undefined
   let drag: { state: EditorState; ranges: readonly { from: number; to: number }[]; text: string } | undefined
   const active = () => !disposed && !broken && enabled && initialized
   function copyPayload(event: ClipboardEvent, editor: EditorView) {
+    if (menuCopy && (menuCopy.state !== editor.state || !menuCopy.current())) { event.preventDefault(); return }
     if (!event.clipboardData) return
     const payload = selectedSource(editor.state)
     event.clipboardData.setData('text/plain', payload.text)
@@ -73,8 +74,7 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
         dragstart(event, editor) {
           const ranges = editor.state.selection.ranges.filter(range => !range.empty)
           if (!ranges.length || !event.dataTransfer) return false
-          const raw = editor.state.field(sourceField)
-          drag = { state: editor.state, ranges, text: ranges.map(range => raw.slice(rawPosition(editor.state, range.from), rawPosition(editor.state, range.to))).join(editor.state.facet(sourceEOL)) }
+          drag = { state: editor.state, ranges, text: ranges.map(range => sourceSlice(editor.state, range.from, range.to)).join(editor.state.facet(sourceEOL)) }
           event.dataTransfer.setData('text/plain', drag.text)
           return false
         },
@@ -132,30 +132,30 @@ export function createSourceEditor(container: HTMLElement, key: string, changed:
   const exactDrag = (event: DragEvent) => { if (drag?.state === view.state) event.dataTransfer?.setData('text/plain', drag.text) }
   view.dom.addEventListener('dragstart', exactDrag)
   const menu = createContextMenu(container, () => {
-    if (disposed || !initialized) return []
-    const state = view.state, capturedRevision = revision, capturedEpoch = epoch
-    const current = () => !disposed && initialized && view.state === state && revision === capturedRevision && epoch === capturedEpoch
-    const payload = selectedSource(state)
+    if (disposed || broken || !initialized) return []
+    const capturedRevision = revision, capturedEpoch = epoch
+    const current = () => !disposed && !broken && initialized && revision === capturedRevision && epoch === capturedEpoch
     const copy = (cut: boolean) => {
       if (!current() || cut && !active()) return
       menu.clearError()
       try {
         view.focus()
-        if (!current()) return
-        menuCopy = { state, confirmed: false }
-        const success = document.execCommand('copy') && menuCopy.confirmed
+        if (!current() || cut && (!active() || view.state.readOnly)) return
+        const state = view.state, payload = selectedSource(state)
+        menuCopy = { state, current, confirmed: false }
+        const success = document.execCommand('copy') && menuCopy.confirmed && current() && view.state === state
         if (!success) throw new Error('Copy failed. Your note was not changed. Use the keyboard shortcut to try again.')
-        if (cut && current() && active() && !view.state.readOnly) {
+        if (cut && current() && view.state === state && active() && !view.state.readOnly) {
           view.dispatch({ changes: payload.ranges.map(range => ({ from: range.from, to: range.to })), userEvent: 'delete.cut' })
         }
       } catch (error) { menu.fail(error instanceof Error ? error.message : String(error)) }
       finally { menuCopy = undefined }
     }
     return [
-      { label: 'Cut', disabled: !active() || state.readOnly, run: () => copy(true) },
+      { label: 'Cut', disabled: !active() || view.state.readOnly, run: () => copy(true) },
       { label: 'Copy', run: () => copy(false) },
-      { label: 'Paste', disabled: true, tooltip: `Menu paste is unsupported. Use ${primaryModifier()}+V to paste.`, run: () => {} },
-      { label: changeAllOccurrences.label, disabled: !active(), run: () => { if (current() && active()) { view.focus(); changeAllOccurrences.run(view) } } },
+      { label: 'Paste', disabled: true, tooltip: `Menu paste is unsupported. Use ${primaryModifier()}+V to paste.` },
+      { label: changeAllOccurrences.label, disabled: !active(), run: () => { if (current() && active()) { view.focus(); if (current() && active()) changeAllOccurrences.run(view) } } },
       { label: 'Select All', run: () => { if (current()) { view.focus(); if (current()) selectAll(view) } } }
     ]
   })

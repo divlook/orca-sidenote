@@ -33,7 +33,6 @@ try {
   if (result.status !== 0) throw new Error(`Changesets version failed (${result.signal ?? result.status})`)
   const { version } = await readJson('package.json')
   if (version !== pkg.version) {
-    // No dependency specs change in this single-package release.
     const manifestText = before.get('orca-plugin.json').toString()
     await writeFile('orca-plugin.json', manifestText.replace(
       /("version"\s*:\s*")[^"]+(")/, (_, prefix, suffix) => `${prefix}${version}${suffix}`

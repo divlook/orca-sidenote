@@ -151,7 +151,6 @@ export class NotesTransfer {
           throw new Error('Destination notes changed. Prepare a new preview and protection file.')
         }
       }
-      // Write the catalog first: an unknown outcome can add unused labels, never dangling assignments.
       if (JSON.stringify(plan.labels) !== JSON.stringify(plan.beforeLabels)) {
         try { await this.lease().writeLabels(plan.labels) }
         catch (reason) {

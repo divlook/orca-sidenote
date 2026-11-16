@@ -20,7 +20,7 @@ const shortcuts = {
 } as const
 
 export const changeAllOccurrences = {
-  label: 'Change All Occurrences', shortcut: '⌘F2', ariaShortcut: 'Meta+F2', key: 'Mod-F2', run: allOccurrences
+  label: 'Change All Occurrences', key: 'Mod-F2', run: allOccurrences
 } as const
 
 export const sourceKeymap: readonly KeyBinding[] = [
@@ -47,7 +47,7 @@ export const sourceShortcutGroups = [
   ['Markdown', [
     ['Bold', shortcuts.bold.display], ['Italic', shortcuts.italic.display],
     ['Strikethrough', shortcuts.strike.display], ['Link', shortcuts.link.display],
-    ['Wrap selected text', `( / [ / { / " / ' / \``]
+    ['Wrap selected text', { alternatives: ['(', '[', '{', '"', "'", '`'], hint: 'Select text, then type one of these characters.' }]
   ]],
   ['Find', [
     ['Find', '⌘F'],

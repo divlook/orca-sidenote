@@ -1,44 +1,64 @@
 import { bindDialog } from '../dialog'
 import type { NoteSession } from './session'
 
-export function bindNoteDeletion(session: NoteSession): void {
-  const dialog = document.querySelector<HTMLDialogElement>('#delete-notes')!
-  const open = document.querySelector<HTMLButtonElement>('#delete-notes-open')!
-  const cancel = document.querySelector<HTMLButtonElement>('#delete-notes-cancel')!
-  const confirm = document.querySelector<HTMLButtonElement>('#delete-notes-confirm')!
-  const description = document.querySelector<HTMLElement>('#delete-notes-description')!
-  const error = document.querySelector<HTMLElement>('#delete-notes-error')!
-  let busy = false
-  bindDialog(dialog, open, cancel, () => !busy)
+export function bindNoteDeletion(dialog: HTMLDialogElement, open: HTMLButtonElement, session: NoteSession, report: (error: unknown) => void) {
+  const get = <T extends HTMLElement>(id: string) => dialog.querySelector<T>(`#${id}`)!
+  const cancel = get<HTMLButtonElement>('delete-notes-cancel'), confirm = get<HTMLButtonElement>('delete-notes-confirm')
+  const description = get<HTMLElement>('delete-notes-description'), error = get<HTMLElement>('delete-notes-error')
+  const events = new AbortController(), signal = events.signal
+  let busy = false, ownsOperation = false, pending = Promise.resolve()
   const showError = (reason: unknown) => {
-    error.textContent = reason instanceof Error ? reason.message : String(reason)
-    error.hidden = false
+    if (signal.aborted) { report(reason); return }
+    error.textContent = reason instanceof Error ? reason.message : String(reason); error.hidden = false
   }
-  open.addEventListener('click', () => {
+  async function finishOperation() {
+    if (!ownsOperation) return
+    ownsOperation = false
+    await session.finishDeletion()
+  }
+  function run(action: () => Promise<void>) {
     busy = true
-    cancel.disabled = confirm.disabled = true
-    error.hidden = true
-    description.textContent = 'Waiting for pending saves and counting notes…'
-    confirm.textContent = 'Delete all notes'
-    void session.prepareDeletion().then(count => {
-      description.textContent = `${count} notes or empty saved locations across all projects and worktrees will be permanently deleted from this plugin store.`
-      confirm.disabled = count === 0
-    }).catch(showError).finally(() => { busy = false; cancel.disabled = false; cancel.focus() })
-  })
+    let complete!: () => void
+    pending = new Promise<void>(resolve => { complete = resolve })
+    void action().catch(showError).finally(() => {
+      busy = false
+      if (!signal.aborted) cancel.disabled = false
+      complete()
+    })
+  }
+  const disposeDialog = bindDialog(dialog, open, cancel, { canClose: () => !busy, opened() {
+    ownsOperation = true
+    run(async () => {
+      cancel.disabled = confirm.disabled = true; error.hidden = true
+      description.textContent = 'Waiting for pending saves and counting notes…'; confirm.textContent = 'Delete all notes'
+      try {
+        const count = await session.prepareDeletion()
+        if (signal.aborted) return
+        description.textContent = `${count} notes or empty saved locations across all projects and worktrees will be permanently deleted from this plugin store.`
+        confirm.disabled = count === 0
+      } finally { if (!signal.aborted) { cancel.disabled = false; cancel.focus() } }
+    })
+  } })
   confirm.addEventListener('click', () => {
     if (busy || confirm.disabled) return
-    busy = true
-    cancel.disabled = confirm.disabled = true
-    error.hidden = true
-    description.textContent = 'Deleting notes…'
-    void session.deletePrepared().then(() => {
-      dialog.close()
-    }).catch(reason => {
-      showError(reason)
-      description.textContent = 'Some notes could not be deleted. Deleted notes cannot be restored. Retry the remaining notes or close this dialog.'
-      confirm.textContent = 'Retry remaining notes'
-      confirm.disabled = false
-    }).finally(() => { busy = false; cancel.disabled = false })
-  })
-  dialog.addEventListener('close', () => { void session.finishDeletion() })
+    run(async () => {
+      cancel.disabled = confirm.disabled = true; error.hidden = true; description.textContent = 'Deleting notes…'
+      try {
+        await session.deletePrepared()
+        if (!signal.aborted) dialog.close()
+      } catch (reason) {
+        showError(reason)
+        if (signal.aborted) return
+        description.textContent = 'Some notes could not be deleted. Deleted notes cannot be restored. Retry the remaining notes or close this dialog.'
+        confirm.textContent = 'Retry remaining notes'; confirm.disabled = false
+      }
+    })
+  }, { signal })
+  dialog.addEventListener('close', () => { void finishOperation().catch(report) }, { signal })
+  return { async dispose() {
+    events.abort(); disposeDialog()
+    if (dialog.open) dialog.close()
+    await pending
+    await finishOperation().catch(report)
+  } }
 }

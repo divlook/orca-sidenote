@@ -22,7 +22,6 @@ export function countSourceLineBreaks(text: string): number {
 
 type SourceChange = { from: number; to: number; text: string }
 
-// Raw UTF-16 ranges are ordered from the end of the source to the beginning.
 export function applySourceChanges(text: string, changes: readonly SourceChange[]): string {
   let result = text
   let previous = text.length

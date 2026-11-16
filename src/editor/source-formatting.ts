@@ -2,14 +2,12 @@ import { EditorSelection, type EditorState, type SelectionRange } from '@codemir
 import { ensureSyntaxTree } from '@codemirror/language'
 import { EditorView, type Command } from '@codemirror/view'
 import { canonicalSource } from '../source-text'
-import { rawEdit, rawPosition, sourceField } from './source-state'
+import { rawEdit, sourceSlice } from './source-state'
 
 export function escapeLinkLabel(text: string): string {
   return text.replace(/[\\`*{}\[\]()#+\-.!_>~|&<]/g, '\\$&')
 }
 
-// Fail closed when parsing has not reached the selection. Never nest automatic
-// links in code, links, images, reference definitions, or raw HTML.
 export function ordinaryLinkLabel(state: EditorState, range: SelectionRange): boolean {
   if (range.empty || !state.sliceDoc(range.from, range.to).trim() || /\n/.test(state.sliceDoc(range.from, range.to))) return false
   const tree = ensureSyntaxTree(state, range.to, 50)
@@ -27,10 +25,10 @@ export function ordinaryLinkLabel(state: EditorState, range: SelectionRange): bo
 
 function formatSelections(view: EditorView, opening: string, closing: string, link = false, typing = false): boolean {
   if (view.state.readOnly || view.composing) return false
-  const state = view.state, ranges = state.selection.ranges, raw = state.field(sourceField)
+  const state = view.state, ranges = state.selection.ranges
   if (typing && ranges.every(range => range.empty)) return false
   const edits = ranges.map(range => {
-    const label = raw.slice(rawPosition(state, range.from), rawPosition(state, range.to))
+    const label = sourceSlice(state, range.from, range.to)
     return { from: range.from, to: range.to,
       insert: typing && range.empty ? opening : opening + (link ? escapeLinkLabel(label) : label) + closing }
   })

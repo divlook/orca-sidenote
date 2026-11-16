@@ -1,4 +1,6 @@
-export type MenuAction = { label: string; disabled?: boolean; tooltip?: string; run: () => void }
+export type MenuAction = { label: string; tooltip?: string } & (
+  { run: () => void; disabled?: boolean } | { disabled: true; run?: never }
+)
 
 let tooltipId = 0
 
@@ -29,7 +31,8 @@ export function createContextMenu(container: HTMLElement, actions: () => MenuAct
     for (const entry of entries) {
       const button = document.createElement('button')
       button.type = 'button'; button.textContent = entry.label; button.disabled = !!entry.disabled
-      button.addEventListener('click', () => { if (!button.disabled && !menu.hidden && captured === generation) { close(true); entry.run() } })
+      const run = entry.run
+      if (run) button.addEventListener('click', () => { if (!button.disabled && !menu.hidden && captured === generation) { close(true); run() } })
       if (entry.disabled && entry.tooltip) {
         const row = document.createElement('div')
         row.className = 'note-context-tooltip-row'; row.setAttribute('role', 'none')

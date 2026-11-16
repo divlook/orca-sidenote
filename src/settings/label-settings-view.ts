@@ -1,22 +1,25 @@
 import { bindDialogControls } from '../dialog'
 import { LABEL_COLORS, type LabelColor, type NoteLabel } from '../notes/note-labels'
 import type { NoteSession } from '../notes/session'
-import type { SettingsDropdown } from './settings-dropdown'
+import type { SettingsDropdown, SettingsDropdownBinding } from './settings-dropdown'
 
-export function createLabelSettings(session: NoteSession, dropdown: SettingsDropdown) {
-  const element = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!
+export function createLabelSettings(root: HTMLElement, dialog: HTMLDialogElement, session: NoteSession, dropdown: SettingsDropdown, report: (error: unknown) => void) {
+  const element = <T extends HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!
+  const control = <T extends HTMLElement>(id: string) => dialog.querySelector<T>(`#${id}`)!
+  const events = new AbortController(), signal = events.signal
   const list = element<HTMLElement>('labels-list'), error = element<HTMLElement>('labels-error')
   const retry = element<HTMLButtonElement>('labels-retry'), add = element<HTMLButtonElement>('label-add')
   const name = element<HTMLInputElement>('label-name'), color = element<HTMLButtonElement>('label-color')
-  const reset = element<HTMLButtonElement>('labels-reset'), dialog = element<HTMLDialogElement>('label-confirm')
-  const title = element<HTMLElement>('label-confirm-title'), description = element<HTMLElement>('label-confirm-description')
-  const confirmError = element<HTMLElement>('label-confirm-error'), cancel = element<HTMLButtonElement>('label-confirm-cancel')
-  const ack = element<HTMLInputElement>('label-confirm-ack')
-  const confirm = element<HTMLButtonElement>('label-confirm-action')
+  const reset = element<HTMLButtonElement>('labels-reset')
+  const title = control<HTMLElement>('label-confirm-title'), description = control<HTMLElement>('label-confirm-description')
+  const confirmError = control<HTMLElement>('label-confirm-error'), cancel = control<HTMLButtonElement>('label-confirm-cancel')
+  const ack = control<HTMLInputElement>('label-confirm-ack')
+  const confirm = control<HTMLButtonElement>('label-confirm-action')
   let localError = '', opener: HTMLElement | null = null, confirming = false, dragging: string | null = null
+  let pending = Promise.resolve(), ownsOperation = false
   type Row = {
     element: HTMLDivElement; input: HTMLInputElement; palette: HTMLButtonElement
-    save: HTMLButtonElement; up: HTMLButtonElement; down: HTMLButtonElement; remove: HTMLButtonElement; renderPalette: () => void
+    save: HTMLButtonElement; up: HTMLButtonElement; down: HTMLButtonElement; remove: HTMLButtonElement; renderPalette: () => void; disposePalette: () => void
     status: HTMLElement; baseline: NoteLabel; draftName: string; draftColor: LabelColor
     feedback: '' | 'saving' | 'saved' | 'failed'
   }
@@ -26,39 +29,65 @@ export function createLabelSettings(session: NoteSession, dropdown: SettingsDrop
   function colors(button: HTMLButtonElement, name: () => string, selected: () => LabelColor, change: (value: LabelColor) => void) {
     return dropdown.bind(button, { name, options: colorOptions, selected, choose: change })
   }
-  colors(color, () => 'Color for new label', () => newColor, value => { newColor = value })
-  function fail(reason: unknown) { localError = reason instanceof Error ? reason.message : String(reason); render() }
+  const newPalette = colors(color, () => 'Color for new label', () => newColor, value => { newColor = value })
+  function fail(reason: unknown) {
+    if (signal.aborted) { report(reason); return }
+    localError = reason instanceof Error ? reason.message : String(reason); render()
+  }
+  async function finishOperation() {
+    if (!ownsOperation) return
+    ownsOperation = false
+    await session.finishLabelDeletion()
+  }
+  function runDestructive(action: () => Promise<void>) {
+    let complete!: () => void
+    pending = new Promise<void>(resolve => { complete = resolve })
+    void action().catch(fail).finally(complete)
+  }
   function run(action: () => Promise<unknown>) { localError = ''; void action().catch(fail) }
   function move(id: string, destination: number) {
     const ids = session.labels.labels.map(label => label.id), index = ids.indexOf(id)
     if (index < 0 || destination < 0 || destination >= ids.length || index === destination) return
     ids.splice(index, 1); ids.splice(destination, 0, id); run(() => session.reorderLabels(ids))
   }
-  async function prepare(label: NoteLabel | null, source: HTMLElement) {
+  function prepare(label: NoteLabel | null, source: HTMLElement) {
     localError = ''; opener = source
-    try {
-      const count = await session.prepareLabelDeletion(label?.id ?? null)
-      title.textContent = label ? `Delete “${label.name}”?` : 'Reset all labels?'
-      description.textContent = label
-        ? `This removes the label from ${count} ${count === 1 ? 'note' : 'notes'} across all projects and worktrees in this store. Note text is unchanged.`
-        : `This removes labels from ${count} ${count === 1 ? 'note' : 'notes'} across all projects and worktrees in this store, deletes the current catalog, and restores the default labels. Note text and order are unchanged.`
-      confirm.textContent = label ? 'Delete label' : 'Reset labels'; confirmError.hidden = true; ack.checked = false; confirm.disabled = true
-      dialog.showModal(); dialog.focus({ preventScroll: true }); dialog.scrollTop = 0
-    } catch (reason) { await session.finishLabelDeletion().catch(fail); fail(reason) }
+    runDestructive(async () => {
+      try {
+        const count = await session.prepareLabelDeletion(label?.id ?? null)
+        ownsOperation = true
+        if (signal.aborted) return
+        title.textContent = label ? `Delete “${label.name}”?` : 'Reset all labels?'
+        description.textContent = label
+          ? `This removes the label from ${count} ${count === 1 ? 'note' : 'notes'} across all projects and worktrees in this store. Note text is unchanged.`
+          : `This removes labels from ${count} ${count === 1 ? 'note' : 'notes'} across all projects and worktrees in this store, deletes the current catalog, and restores the default labels. Note text and order are unchanged.`
+        confirm.textContent = label ? 'Delete label' : 'Reset labels'; confirmError.hidden = true; ack.checked = false; confirm.disabled = true; cancel.disabled = false
+        dialog.showModal(); dialog.focus({ preventScroll: true }); dialog.scrollTop = 0
+      } catch (reason) { await finishOperation().catch(fail); fail(reason) }
+    })
   }
-  bindDialogControls(dialog, cancel, { canClose: () => !confirming, returnFocus: () => opener })
-  dialog.addEventListener('close', () => { void session.finishLabelDeletion().catch(fail) })
-  ack.addEventListener('change', () => { confirm.disabled = !ack.checked || confirming })
+  const disposeDialog = bindDialogControls(dialog, cancel, { canClose: () => !confirming, returnFocus: () => opener })
+  dialog.addEventListener('close', () => { void finishOperation().catch(fail) }, { signal })
+  ack.addEventListener('change', () => { confirm.disabled = !ack.checked || confirming }, { signal })
   confirm.addEventListener('click', () => {
     if (confirming || !ack.checked) return
     confirming = true; confirm.disabled = cancel.disabled = true; confirmError.hidden = true
-    void session.deletePreparedLabels().then(() => dialog.close()).catch(reason => {
-      confirmError.textContent = reason instanceof Error ? reason.message : String(reason); confirmError.hidden = false
-    }).finally(() => { confirming = false; confirm.disabled = !ack.checked; cancel.disabled = false })
-  })
-  retry.addEventListener('click', () => run(() => session.loadLabels()))
-  add.addEventListener('click', () => run(async () => { await session.addLabel(name.value, newColor); name.value = '' }))
-  reset.addEventListener('click', () => { void prepare(null, reset) })
+    runDestructive(async () => {
+      try {
+        await session.deletePreparedLabels()
+        if (!signal.aborted) dialog.close()
+      } catch (reason) {
+        if (signal.aborted) report(reason)
+        else { confirmError.textContent = reason instanceof Error ? reason.message : String(reason); confirmError.hidden = false }
+      } finally {
+        confirming = false
+        if (!signal.aborted) { confirm.disabled = !ack.checked; cancel.disabled = false }
+      }
+    })
+  }, { signal })
+  retry.addEventListener('click', () => run(() => session.loadLabels()), { signal })
+  add.addEventListener('click', () => run(async () => { await session.addLabel(name.value, newColor); if (!signal.aborted) name.value = '' }), { signal })
+  reset.addEventListener('click', () => { void prepare(null, reset) }, { signal })
   function dirty(row: Row) { return row.draftName !== row.baseline.name || row.draftColor !== row.baseline.color }
   function updateRow(row: Row, enabled: boolean, index: number, count: number) {
     row.element.draggable = enabled
@@ -89,41 +118,44 @@ export function createLabelSettings(session: NoteSession, dropdown: SettingsDrop
     const down = document.createElement('button'); down.type = 'button'; down.textContent = '↓'
     const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Delete'
     const actions = document.createElement('div'); actions.className = 'label-row-actions'; actions.append(status, save, up, down, remove)
-    let paletteControl: { render(): void }
-    const row: Row = { element, input, palette, save, up, down, remove, status, baseline: label, draftName: label.name, draftColor: label.color, feedback: '', renderPalette: () => paletteControl.render() }
+    let paletteControl: SettingsDropdownBinding
+    const row: Row = { element, input, palette, save, up, down, remove, status, baseline: label, draftName: label.name, draftColor: label.color, feedback: '',
+      renderPalette: () => paletteControl.render(), disposePalette: () => paletteControl.dispose() }
     const changed = () => { row.feedback = ''; updateRow(row, session.labels.ready && !session.labels.busy, session.labels.labels.findIndex(value => value.id === label.id), session.labels.labels.length) }
-    input.addEventListener('input', () => { row.draftName = input.value; changed() })
+    input.addEventListener('input', () => { row.draftName = input.value; changed() }, { signal })
     paletteControl = colors(palette, () => `Color for ${row.baseline.name}`, () => row.draftColor, value => { row.draftColor = value; changed() })
     save.addEventListener('click', () => {
       const submittedName = row.draftName, submittedColor = row.draftColor
       localError = ''; row.feedback = 'saving'; render()
       void session.updateLabel(label.id, submittedName, submittedColor).then(() => {
+        if (signal.aborted) return
         row.feedback = 'saved'
         const saved = session.labels.labels.find(value => value.id === label.id)
         if (saved) { row.baseline = saved; row.draftName = saved.name; row.draftColor = saved.color; row.input.value = saved.name }
         render()
       }).catch(reason => { row.feedback = 'failed'; fail(reason) })
-    })
-    up.addEventListener('click', () => move(label.id, session.labels.labels.findIndex(value => value.id === label.id) - 1))
-    down.addEventListener('click', () => move(label.id, session.labels.labels.findIndex(value => value.id === label.id) + 1))
-    remove.addEventListener('click', () => { void prepare(row.baseline, remove) })
+    }, { signal })
+    up.addEventListener('click', () => move(label.id, session.labels.labels.findIndex(value => value.id === label.id) - 1), { signal })
+    down.addEventListener('click', () => move(label.id, session.labels.labels.findIndex(value => value.id === label.id) + 1), { signal })
+    remove.addEventListener('click', () => { void prepare(row.baseline, remove) }, { signal })
     element.append(input, palette, actions)
     element.addEventListener('dragstart', event => {
       if (!session.labels.ready || !event.dataTransfer || (event.target as HTMLElement).closest('input, button, label, fieldset')) { event.preventDefault(); return }
       dragging = label.id; event.dataTransfer.setData('text/plain', label.id); event.dataTransfer.effectAllowed = 'move'; element.classList.add('dragging')
-    })
-    element.addEventListener('dragend', () => { dragging = null; for (const child of list.children) child.classList.remove('dragging', 'drop-before', 'drop-after') })
-    element.addEventListener('dragover', event => { if (!dragging || dragging === label.id) return; event.preventDefault(); for (const child of list.children) child.classList.remove('drop-before', 'drop-after'); element.classList.add(event.clientY < element.getBoundingClientRect().top + element.offsetHeight / 2 ? 'drop-before' : 'drop-after') })
-    element.addEventListener('drop', event => { if (!dragging) return; event.preventDefault(); const ids = session.labels.labels.map(value => value.id), from = ids.indexOf(dragging); let to = ids.indexOf(label.id) + Number(element.classList.contains('drop-after')); if (from < to) to--; move(dragging, to); dragging = null })
+    }, { signal })
+    element.addEventListener('dragend', () => { dragging = null; for (const child of list.children) child.classList.remove('dragging', 'drop-before', 'drop-after') }, { signal })
+    element.addEventListener('dragover', event => { if (!dragging || dragging === label.id) return; event.preventDefault(); for (const child of list.children) child.classList.remove('drop-before', 'drop-after'); element.classList.add(event.clientY < element.getBoundingClientRect().top + element.offsetHeight / 2 ? 'drop-before' : 'drop-after') }, { signal })
+    element.addEventListener('drop', event => { if (!dragging) return; event.preventDefault(); const ids = session.labels.labels.map(value => value.id), from = ids.indexOf(dragging); let to = ids.indexOf(label.id) + Number(element.classList.contains('drop-after')); if (from < to) to--; move(dragging, to); dragging = null }, { signal })
     return row
   }
   function render() {
+    if (signal.aborted) return
     const state = session.labels, enabled = state.ready && !state.busy
     error.textContent = localError || state.error; error.hidden = !error.textContent
     retry.hidden = !state.error; retry.disabled = state.busy
     name.disabled = color.disabled = add.disabled = reset.disabled = !enabled
     const ids = new Set(state.labels.map(label => label.id))
-    for (const [id, row] of rows) if (!ids.has(id)) { row.element.remove(); rows.delete(id) }
+    for (const [id, row] of rows) if (!ids.has(id)) { row.disposePalette(); row.element.remove(); rows.delete(id) }
     state.labels.forEach((label, index) => {
       let row = rows.get(label.id)
       if (!row) { row = createRow(label); rows.set(label.id, row) }
@@ -144,5 +176,12 @@ export function createLabelSettings(session: NoteSession, dropdown: SettingsDrop
       if (list.children[index] !== row.element) list.insertBefore(row.element, list.children[index] ?? null)
     })
   }
-  return { render }
+  return { render, async dispose() {
+    events.abort(); disposeDialog(); newPalette.dispose()
+    for (const row of rows.values()) { row.disposePalette(); row.element.remove() }
+    rows.clear()
+    if (dialog.open) dialog.close()
+    await pending
+    await finishOperation().catch(report)
+  } }
 }

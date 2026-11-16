@@ -1,11 +1,12 @@
 import { NoteFilters, allNotes } from './note-filter'
 import type { NoteLabel } from './note-labels'
 
-export function bindNoteFilter(filters: NoteFilters, choosing: () => void) {
-  const get = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
-  const root = get('note-filter'), trigger = get<HTMLButtonElement>('filter-open'), summary = get('filter-summary')
+export function bindNoteFilter(root: HTMLElement, empty: HTMLElement, filters: NoteFilters, choosing: () => void) {
+  const get = <T extends HTMLElement>(id: string) => root.querySelector<T>(`#${id}`)!
+  const trigger = get<HTMLButtonElement>('filter-open'), summary = get('filter-summary')
   const menu = get('filter-menu'), clear = get<HTMLButtonElement>('filter-clear'), retry = get<HTMLButtonElement>('filter-retry')
-  const count = get('filter-count'), empty = get('filtered-empty'), emptyClear = get<HTMLButtonElement>('filtered-empty-clear')
+  const count = get('filter-count'), emptyClear = empty.querySelector<HTMLButtonElement>('#filtered-empty-clear')!
+  const events = new AbortController(), signal = events.signal
   trigger.setAttribute('aria-haspopup', 'dialog')
   menu.setAttribute('role', 'dialog'); menu.setAttribute('aria-label', 'Filter notes by label')
   let signature = '', disposed = false
@@ -24,27 +25,27 @@ export function bindNoteFilter(filters: NoteFilters, choosing: () => void) {
     if (!menu.hidden) { close(); return }
     menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); position()
     menu.querySelector<HTMLButtonElement>('.note-filter-option')?.focus()
-  })
+  }, { signal })
   trigger.addEventListener('keydown', event => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); trigger.click() }
-  })
-  clear.addEventListener('click', () => choose())
-  emptyClear.addEventListener('click', () => { trigger.focus({ preventScroll: true }); choose() })
-  retry.addEventListener('click', () => { void filters.retry() })
+  }, { signal })
+  clear.addEventListener('click', () => choose(), { signal })
+  emptyClear.addEventListener('click', () => { trigger.focus({ preventScroll: true }); choose() }, { signal })
+  retry.addEventListener('click', () => { void filters.retry() }, { signal })
   menu.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
     const buttons = [...menu.querySelectorAll<HTMLButtonElement>('.note-filter-option')], index = buttons.indexOf(document.activeElement as HTMLButtonElement)
     buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus()
-  })
+  }, { signal })
   const outside = (event: PointerEvent) => { if (event.target instanceof Node && !root.contains(event.target)) close() }
   const focusout = () => { requestAnimationFrame(() => { if (!disposed && !root.contains(document.activeElement)) close() }) }
   const scroll = (event: Event) => { if (!(event.target instanceof Node) || !menu.contains(event.target)) close() }
-  root.addEventListener('focusout', focusout)
-  document.addEventListener('pointerdown', outside, true)
-  document.addEventListener('scroll', scroll, true)
-  window.addEventListener('resize', closeOnResize)
+  root.addEventListener('focusout', focusout, { signal })
+  document.addEventListener('pointerdown', outside, { capture: true, signal })
+  document.addEventListener('scroll', scroll, { capture: true, signal })
+  window.addEventListener('resize', closeOnResize, { signal })
   function closeOnResize() { close() }
   return {
     root,
@@ -72,7 +73,7 @@ export function bindNoteFilter(filters: NoteFilters, choosing: () => void) {
             const value = filters.view.value
             choose(entry.id ? { ...value, labelIds: value.labelIds.includes(entry.id) ? value.labelIds.filter(id => id !== entry.id) : [...value.labelIds, entry.id] }
               : { ...value, noLabel: !value.noLabel })
-          })
+          }, { signal })
         }
       }
       for (const row of menu.querySelectorAll<HTMLButtonElement>('.note-filter-option')) {
@@ -82,9 +83,7 @@ export function bindNoteFilter(filters: NoteFilters, choosing: () => void) {
       if (!menu.hidden) position()
     },
     dispose() {
-      disposed = true; close(); root.removeEventListener('focusout', focusout)
-      document.removeEventListener('pointerdown', outside, true); document.removeEventListener('scroll', scroll, true)
-      window.removeEventListener('resize', closeOnResize)
+      disposed = true; close(); events.abort()
     }
   }
 }

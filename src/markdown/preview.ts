@@ -82,7 +82,7 @@ export function createPreview(element: HTMLElement, openLink: (href: string) => 
           { ...paragraph, tokens: [checkbox, ...(paragraph as Tokens.Paragraph).tokens] }, ...token.tokens.slice(2)
         ] })
       }
-      // A template is inert. Remove all native navigation before sanitizing/inserting.
+      // A template is inert.
       const template = document.createElement('template')
       template.innerHTML = marked.parser(parsed.tokens, { renderer })
       const links: { id: string; href: string }[] = []

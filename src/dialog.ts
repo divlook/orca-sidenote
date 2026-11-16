@@ -1,6 +1,7 @@
 type DialogPolicy = { canClose: () => boolean; returnFocus: () => HTMLElement | null | undefined; consumeEscape?: () => boolean }
 
-export function bindDialogControls(dialog: HTMLDialogElement, close: HTMLButtonElement, policy: DialogPolicy): () => void {
+export function bindDialogControls(dialog: HTMLDialogElement, close: HTMLButtonElement | readonly HTMLButtonElement[], policy: DialogPolicy): () => void {
+  const controls = Array.isArray(close) ? close : [close as HTMLButtonElement]
   const closeDialog = () => { if (policy.canClose()) dialog.close() }
   const restoreFocus = () => { policy.returnFocus()?.focus({ preventScroll: true }) }
   const cancel = (event: Event) => { event.preventDefault(); event.stopPropagation(); closeDialog() }
@@ -19,13 +20,13 @@ export function bindDialogControls(dialog: HTMLDialogElement, close: HTMLButtonE
     event.preventDefault(); event.stopImmediatePropagation()
     if (!policy.consumeEscape?.()) closeDialog()
   }
-  close.addEventListener('click', closeDialog)
+  for (const control of controls) control.addEventListener('click', closeDialog)
   dialog.addEventListener('close', restoreFocus)
   dialog.addEventListener('cancel', cancel)
   dialog.addEventListener('keydown', tab)
   window.addEventListener('keydown', escape, { capture: true })
   return () => {
-    close.removeEventListener('click', closeDialog)
+    for (const control of controls) control.removeEventListener('click', closeDialog)
     dialog.removeEventListener('close', restoreFocus)
     dialog.removeEventListener('cancel', cancel)
     dialog.removeEventListener('keydown', tab)
@@ -33,7 +34,12 @@ export function bindDialogControls(dialog: HTMLDialogElement, close: HTMLButtonE
   }
 }
 
-export function bindDialog(dialog: HTMLDialogElement, opener: HTMLButtonElement, close: HTMLButtonElement, canClose = () => true, consumeEscape?: () => boolean): void {
-  opener.addEventListener('click', () => dialog.showModal())
-  bindDialogControls(dialog, close, { canClose, returnFocus: () => opener, consumeEscape })
+export function bindDialog(dialog: HTMLDialogElement, opener: HTMLButtonElement, close: HTMLButtonElement | readonly HTMLButtonElement[],
+  options: { canClose?: () => boolean; consumeEscape?: () => boolean; opened?: () => void } = {}): () => void {
+  const open = () => { dialog.showModal(); options.opened?.() }
+  opener.addEventListener('click', open)
+  const dispose = bindDialogControls(dialog, close, {
+    canClose: options.canClose ?? (() => true), returnFocus: () => opener, consumeEscape: options.consumeEscape
+  })
+  return () => { opener.removeEventListener('click', open); dispose() }
 }

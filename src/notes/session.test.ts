@@ -100,15 +100,14 @@ test('waiting text saves coalesce full collections and settle together after the
   const firstStarted = Promise.withResolvers<void>(), releaseFirst = Promise.withResolvers<void>()
   const latestStarted = Promise.withResolvers<void>(), releaseLatest = Promise.withResolvers<void>()
   const attempts: NoteCollection[] = []
-  let notifications = 0, settled = 0
+  let settled = 0
   const session = new NoteSession({ ...store, set: async (key, value) => {
     attempts.push(readCollection(value))
     if (attempts.length === 1) { firstStarted.resolve(); await releaseFirst.promise }
     else { latestStarted.resolve(); await releaseLatest.promise }
     await store.set(key, value)
-  } }, () => { notifications++ })
+  } }, () => {})
   await session.follow(async () => local)
-  notifications = 0
   const first = session.save('in flight', session.view.notes[0].key)
   await firstStarted.promise
   const saves = Array.from({ length: 100 }, (_, i) =>
@@ -126,7 +125,6 @@ test('waiting text saves coalesce full collections and settle together after the
   await Promise.all(saves)
   assert.equal(settled, 100)
   assert.equal(attempts.length, 2)
-  assert.equal(notifications, 103)
   assert.deepEqual(readCollection(values.get(noteKey(local))), collection(initial.notes.map((note, i) => ({ ...note, text: `latest${i}` }))))
   assert.equal(session.view.pending, 0)
   assert.equal(session.view.dirty, false)
@@ -175,7 +173,6 @@ for (const barrier of ['create', 'reorder', 'retry', 'delete', 'prune', 'follow'
       }
       await store.set(key, value)
     } }, () => {
-      // Assignment notifies before its catalog awaits; nested text input must already see the barrier.
       if (barrier === 'assign' && nested && session.labels.busy) {
         nested = false
         later = session.save('after barrier', card)

@@ -19,7 +19,6 @@ function readFilter(value: unknown): NoteFilter {
   return { version: 1, labelIds: [...record.labelIds], noLabel: record.noLabel }
 }
 
-/** Move displayed slots only; hidden indices and the latest collection membership stay fixed. */
 export function reorderDisplayed(full: readonly string[], displayed: ReadonlySet<string>, moving: string, target: string, after = false): string[] {
   const visible = full.filter(id => displayed.has(id))
   if (!visible.includes(moving) || !visible.includes(target) || moving === target) return [...full]

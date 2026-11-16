@@ -116,6 +116,10 @@ article blockquote { margin-left: 0; padding-left: 12px; border-left: 3px solid 
 .shortcut-row dt { overflow-wrap: anywhere; }
 .shortcut-row dd { margin: 0; text-align: right; }
 .shortcut-row kbd { font: 12px/1.5 system-ui, sans-serif; white-space: nowrap; }
+.shortcut-row-with-hint { row-gap: 0; }
+.shortcut-row dd.shortcut-hint { grid-column: 1 / -1; margin-top: 4px; color: var(--orca-muted-foreground); font-size: 12px; text-align: left; }
+.shortcut-alternatives { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 164px; }
+.shortcut-alternatives kbd { min-width: 20px; box-sizing: border-box; text-align: center; border: 1px solid var(--orca-border); border-radius: 4px; }
 .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 40%); align-items: start; gap: 12px; padding: 14px 0; border-top: 1px solid var(--orca-border); }
 .setting-copy h3 { margin: 0; font-size: 13px; font-weight: 600; }
 .setting-copy p { margin: 4px 0 0; color: var(--orca-muted-foreground); font-size: 12px; }
