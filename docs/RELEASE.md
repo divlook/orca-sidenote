@@ -5,9 +5,17 @@ The package stays `private: true`. Orca distributes this plugin through Git, not
 ## Prepare a distribution
 
 1. Complete [Documentation maintenance](DOCUMENTATION.md) for the release and the relevant [verification](VERIFICATION.md). Record what ran.
-2. Review the manifest version, Orca compatibility, and permissions. Use `/Applications/Orca.app/Contents/Resources/bin/orca plugin inspect . --json` to inspect contributions and access.
+2. Review the manifest version, Orca compatibility, and permissions. Inspect contributions and access from the clean distribution copy described below.
 3. Run `npm ci` and `npm run build`. Include runtime source, the complete generated `dist/`, project LICENSE, and [third-party notices](NOTICES.md) in the same distribution commit.
 4. Check for private notes, paths, screenshots, and local settings. Exclude `node_modules/` and `.orca/`.
+
+Run distribution checks on a complete Git-distribution copy or export containing runtime source, built assets, media, LICENSE, and notices. Exclude `node_modules/`, `.git/`, and `.orca/`; ignored dependency symlinks can make an ordinary development checkout fail inspection. Keep development dependencies in place and retain validation rules. Replace `/path/to/distribution` with the clean copy's directory:
+
+```sh
+/Applications/Orca.app/Contents/Resources/bin/orca plugin inspect /path/to/distribution --json
+/Applications/Orca.app/Contents/Resources/bin/orca plugin check /path/to/distribution --json
+/Applications/Orca.app/Contents/Resources/bin/orca plugin validate /path/to/distribution --json
+```
 
 Do not distribute `dist/` alone. The manifest points to `src/worker.mjs` and `src/panel.html`. The worker imports modules from `src/worktree/` and their dependencies. The HTML uses source CSS and built assets.
 
