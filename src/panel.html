@@ -38,23 +38,24 @@
     <div id="note-list"></div>
     <button id="add-note-bottom" class="add-note" type="button" disabled>+ Add note</button>
   </main>
-  <dialog id="shortcuts-help" aria-labelledby="shortcuts-title" aria-describedby="shortcuts-instructions">
-    <header class="help-heading">
+  <dialog id="shortcuts-help" class="panel-dialog" aria-labelledby="shortcuts-title" aria-describedby="shortcuts-instructions">
+    <header class="dialog-heading">
       <h2 id="shortcuts-title">Keyboard Shortcuts</h2>
-      <button id="shortcuts-close" class="icon-button" type="button" aria-label="Close keyboard shortcuts" title="Close" autofocus>
-        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false"><path d="m4 4 8 8M12 4l-8 8"/></svg>
-      </button>
+      <button id="shortcuts-close" class="icon-button" type="button" aria-label="Close keyboard shortcuts" title="Close" autofocus>×</button>
     </header>
-    <p id="shortcuts-instructions">Use shortcuts in Source.</p>
-    <div id="shortcuts-list" tabindex="0" role="region" aria-label="Mac keyboard shortcuts">
-      <p class="key-legend">Common shortcuts · macOS<br>⌘ Command · ⌥ Option · ⇧ Shift</p>
+    <div id="shortcuts-body" class="dialog-body" tabindex="0" role="region" aria-label="Mac keyboard shortcuts">
+      <p id="shortcuts-instructions" class="dialog-description">Use shortcuts in Source.</p>
+      <div id="shortcuts-list">
+        <p class="key-legend">Common shortcuts · macOS<br>⌘ Command · ⌥ Option · ⇧ Shift</p>
+      </div>
     </div>
+    <footer class="dialog-footer"><button id="shortcuts-close-footer" type="button">Close</button></footer>
   </dialog>
-  <dialog id="note-settings" aria-labelledby="settings-title" aria-describedby="settings-description">
-    <header class="help-heading"><h2 id="settings-title">Note Settings</h2><button id="settings-close" class="icon-button" type="button" aria-label="Close note settings" title="Close">×</button></header>
-    <div id="settings-body">
+  <dialog id="note-settings" class="panel-dialog" aria-labelledby="settings-title" aria-describedby="settings-description">
+    <header class="dialog-heading"><h2 id="settings-title">Note Settings</h2><button id="settings-close" class="icon-button" type="button" aria-label="Close note settings" title="Close">×</button></header>
+    <div id="settings-body" class="dialog-body">
     <form id="settings-form">
-      <p id="settings-description">Preferences save automatically. Label name and color edits require Save changes.</p>
+      <p id="settings-description" class="dialog-description">Preferences save automatically. Label name and color edits require Save changes.</p>
       <section class="setting-row" aria-labelledby="confirmation-title">
         <div class="setting-copy">
           <h3 id="confirmation-title"><label for="confirm-note-deletion">Confirm before deleting a note</label></h3>
@@ -109,7 +110,7 @@
       <button id="delete-notes-open" type="button" aria-haspopup="dialog" aria-controls="delete-notes">Delete all notes…</button>
     </section>
     </div>
-    <footer class="settings-footer"><button id="settings-close-footer" type="button">Close</button></footer>
+    <footer class="dialog-footer"><button id="settings-close-footer" type="button">Close</button></footer>
   </dialog>
   <dialog id="label-confirm" aria-labelledby="label-confirm-title" aria-describedby="label-confirm-description">
     <h2 id="label-confirm-title">Delete label?</h2>

@@ -4,13 +4,15 @@ Use this procedure when asked to maintain documentation, before marking implemen
 
 ## 1. Set the scope
 
-- For implementation completion, cover every changed behavior and its affected instructions, examples, and references.
+- For implementation completion, review guidance affected by the changed behavior. Update it only where the change makes an instruction inaccurate or leaves a gap that affects use, maintenance, or verification.
 - Before a release, also cover installation, compatibility, permissions, distribution, and recovery instructions affected by the release.
 - For a repository-wide documentation request, cover all maintained documents and their connections. Include generated documents in consistency checks, but update them through their owning workflow.
 
-Use [Agent guidance](../AGENTS.md#read-by-task) to locate documents by topic. Follow links from the affected documents to find related guidance. Read the [Glossary](../GLOSSARY.md) when product terms are involved.
+Use [Agent guidance](../AGENTS.md#read-by-task) to locate documents by topic. Follow related links only when needed to resolve an in-scope claim or changed reference. Read the [Glossary](../GLOSSARY.md) when product terms are involved.
 
-Complete this step when every affected topic has an identified document, or an explicit documentation gap.
+Prefer an edit in the authoritative document. Add material only if it changes a reader's action, explains a non-obvious constraint or ownership decision, or supplies a missing verification condition. Keep code-discoverable details in the code and per-change results in the change report.
+
+Complete this step when each affected topic has either a necessary correction or gap to address, or existing guidance that remains sufficient. An implementation change may need no guide edits; release-entry requirements are separate.
 
 ## 2. Check facts against evidence
 
@@ -35,7 +37,7 @@ Keep prerequisites and warnings before the actions they govern. Group a concept'
 
 Remove obsolete instructions, duplicate explanations, and accumulated work logs that no longer guide a task. Keep current verification procedures in [Verification](VERIFICATION.md) and per-change results in the change report. Preserve user-authored notes and historical release entries.
 
-Complete this step when every maintained document in scope has an entry path, every changed heading has its incoming links updated, and each removed passage is obsolete or covered by an authoritative reference.
+Complete this step when changed guidance has an entry path, links to renamed or removed headings are updated, and removed passages are obsolete, redundant, or unnecessary for the task.
 
 ## 4. Improve the writing
 
@@ -56,8 +58,8 @@ Complete this step when each edit fixes an identified reader problem without int
 
 ## 5. Verify and report
 
-Follow the documentation-only checks in [Verification](VERIFICATION.md#runtime-configuration-and-dependencies). Check relative links, target headings, document reachability, and documented commands. Verify new or changed external requirements against their official sources.
+Follow the documentation-only checks in [Verification](VERIFICATION.md#runtime-configuration-and-dependencies). Check links, target headings, and commands introduced or affected by the edits. Check incoming links when a file or heading moves or is removed. Verify new or changed external requirements against their official sources.
 
 Use [Contributing](../CONTRIBUTING.md#prepare-a-change) as the authority for generated files and release entries. [Release](RELEASE.md#prepare-a-distribution) owns distribution checks, which are separate from this procedure. Documentation maintenance alone does not authorize a commit, version bump, release, access approval, or changes to user data.
 
-Finish when every in-scope topic is accounted for, documentation checks pass, and unresolved issues are explicit. Report changed documents, material corrections or removals, checks performed, and anything that could not be verified. Report an unresolved contradiction as incomplete work rather than declaring the documentation consistent.
+Finish when the scoped corrections and their checks are complete; unchanged guidance may remain unchanged. Report changed documents, material corrections or removals, checks performed, and unresolved issues. An unresolved in-scope contradiction means the work is incomplete.

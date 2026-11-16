@@ -2,6 +2,10 @@
 
 Write repository documentation in English. Preserve user notes and settings. Use isolated stores for destructive tests.
 
+## Change scope
+
+Make the smallest complete change that satisfies the request and preserves the invariants below. Include required caller and contract updates; leave independent cleanup and speculative abstractions outside the change.
+
 ## Invariants
 
 - Preserve `note:v1:` + `JSON.stringify([hostId, path])` and host/path isolation. Plan migration before changing the format.

@@ -47,6 +47,7 @@ bindNoteDeletion(session)
 bindNoteTransfer(new NotesTransfer(session))
 renderShortcutHelp(element('shortcuts-list'))
 bindDialog(element<HTMLDialogElement>('shortcuts-help'), element('shortcuts-open'), element('shortcuts-close'))
+element('shortcuts-close-footer').addEventListener('click', () => element<HTMLDialogElement>('shortcuts-help').close())
 void orca.plugin.request('notes.devStatus').then(value => {
   if (value === true) element('dev-badge').hidden = false
 }).catch(() => {})

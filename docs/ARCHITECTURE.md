@@ -17,6 +17,8 @@ Use the [Glossary](../GLOSSARY.md) for product terminology, [Data](DATA.md) for 
 
 The Markdown renderer used in reading mode renders fenced code as escaped plain text regardless of language. DOMPurify sanitizes the rendered Markdown. CodeMirror's source highlighting in editing mode is independent. Mermaid uses the ordinary code path.
 
+Keyboard Shortcuts and Note Settings share layout styles in [panel.css](../src/panel.css), while each dialog owns its content and initial focus.
+
 Preserve Orca's guest resource and asset-session restrictions on remote images, fonts, stylesheets, and network calls.
 
 Source uses explicit light/dark syntax palettes and host surface colors. If the comment color has insufficient contrast against an opaque host canvas, Source uses the host body foreground when it improves contrast. The check runs for same-scheme theme changes too. Transparent canvases retain the syntax palette. This is not a contrast guarantee for every theme or syntax token. Preview uses underlined body-colored links, semantic inline-code fills and borders, and host-colored plain code blocks.

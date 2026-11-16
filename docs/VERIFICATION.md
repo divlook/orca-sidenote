@@ -4,7 +4,9 @@ Run tests and checks only for code you trust. Orca can execute them locally with
 
 ## Runtime, configuration, and dependencies
 
-Run from the repository root:
+Choose the smallest check or scenario that exercises the changed behavior and affected contracts. Expand coverage for a failure, a shared-contract impact, an explicit request, or a release requirement. Reuse existing coverage; add a test for an uncovered, plausible user-visible failure. Stop when the scoped checks pass, and report any unavailable checks.
+
+Run selected commands from the repository root:
 
 ```sh
 npm run typecheck
@@ -20,7 +22,7 @@ Pull request CI runs `npm ci`, `npm run build`, and `npm test` on Ubuntu with No
 
 For a focused run, use `npm run test:model`, `npm run test:editor`, or `npm run test:release`. Release tests use temporary Git repositories and isolated GitHub API fixtures. They do not contact GitHub or require Orca.
 
-For documentation-only changes, check relative links and commands against current scripts and installed CLI help. Record those checks instead of running unrelated builds or behavior tests.
+For documentation-only changes, check affected links and headings; check changed commands against current scripts or installed CLI help. Record those checks instead of running builds or behavior tests.
 
 ## Manual behavior
 
@@ -31,6 +33,7 @@ Use test notes and an approved disposable panel where native dialogs must be exe
 - Check default per-note confirmation, cancellation, and deletion of only the captured ID. Check context changes while confirming and recovery from a failed deletion. Check immediate deletion with confirmation Off and re-enabling confirmation. Changing the setting alone must delete nothing. The bulk-delete confirmation must remain separate.
 - Edit past 8,000 characters without a cap or counter. Check independent line-number and deletion-confirmation controls, reload persistence, delayed writes, failed-write rollback, and retry. Check real autosave errors retain full drafts and offer retry without normal pending/success labels. Controls remain enabled during normal writes.
 - Check settings and shortcut dialogs for Tab wrapping, Escape, and focus return. Check Enter continuation and exit for nested unordered, ordered, and task lists, literal fenced code, multiple cursors, and multiline paste.
+- In Keyboard Shortcuts, check body-only wheel and keyboard scrolling in light, dark, and narrow views. Instructions and the key-symbol legend scroll with the body; the header and footer **Close** stay visible without horizontal overflow.
 - Toggle renderer-created tasks by click and Space. Check undo, focus, exact markers, save retry, duplicate tasks, CRLF/Unicode, stale events, and read-only transitions. Raw HTML inputs stay disabled. Check alignment in tight, loose, nested, ordered, quoted, and wrapped lists at narrow widths, including Chinese and Korean text.
 - Check inline code, nested lists, and light, dark, and same-scheme theme changes. Single LF and CRLF breaks in paragraphs and list continuations must render as line breaks while blank lines separate paragraphs. Known, aliased, unknown, and missing code languages must all retain escaped Preview text and whitespace without syntax highlighting. Mermaid fences remain ordinary code. Check Source Markdown highlighting. Check sanitization of raw HTML, JavaScript links, and images. Viewing must not write storage.
 - In an approved disposable panel, check HTTP and HTTPS links with Default browser, Orca, and Ask every time, including cancellation. Orca must open a new browser tab. `mailto:` must open externally. Check persistence, delayed preference writes, failed-write rollback, retry, and unreadable settings. Check access reapproval when upgrading from a version without `workspace:write`. Approval alone must open nothing.

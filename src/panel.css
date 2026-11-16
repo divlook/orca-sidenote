@@ -92,20 +92,22 @@ article blockquote { margin-left: 0; padding-left: 12px; border-left: 3px solid 
 .icon-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
   width: 24px; height: 24px; padding: 4px; border-radius: 4px; }
 .icon-button:hover { color: var(--orca-foreground); background: var(--orca-muted); }
-#shortcuts-help, #note-settings { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
-  margin: auto; padding: 12px; overflow: hidden; border: 1px solid var(--orca-border); border-radius: 8px;
+.panel-dialog { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
+  margin: auto; padding: 0; overflow: hidden; border: 1px solid var(--orca-border); border-radius: 8px;
   color: var(--orca-foreground); background: var(--orca-background); font: inherit; }
-#shortcuts-help[open] { display: flex; flex-direction: column; }
-#shortcuts-help::backdrop, #note-settings::backdrop { background: rgb(0 0 0 / 45%); }
-.help-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
-.help-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
-#shortcuts-instructions { margin: 4px 0 10px; flex-shrink: 0; color: var(--orca-muted-foreground); }
-#shortcuts-list { min-height: 0; min-width: 0; padding-inline-end: 20px;
-  overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-#note-panel, #settings-body, #shortcuts-list { scrollbar-width: thin;
+.panel-dialog[open] { display: flex; flex-direction: column; }
+.panel-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.help-heading, .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+.help-heading h2, .dialog-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.dialog-heading { padding: 12px; border-bottom: 1px solid var(--orca-border); }
+.dialog-body { min-height: 0; min-width: 0; padding: 0 12px 16px; overflow: auto; overscroll-behavior: contain; }
+.dialog-footer { display: flex; justify-content: flex-end; flex: none; padding: 12px; border-top: 1px solid var(--orca-border); }
+.dialog-footer button { padding: 5px 10px; border: 1px solid var(--orca-border); border-radius: 4px; }
+.dialog-description { margin: 8px 0 14px; color: var(--orca-muted-foreground); }
+#note-panel, .dialog-body { scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--orca-muted-foreground) 34%, transparent) transparent; }
-#note-panel:hover, #settings-body:hover, #shortcuts-list:hover { scrollbar-color: color-mix(in srgb, var(--orca-muted-foreground) 48%, transparent) transparent; }
-#shortcuts-list:focus-visible { outline: 2px solid var(--orca-ring); outline-offset: -2px; }
+#note-panel:hover, .dialog-body:hover { scrollbar-color: color-mix(in srgb, var(--orca-muted-foreground) 48%, transparent) transparent; }
+.dialog-body:focus-visible { outline: 2px solid var(--orca-ring); outline-offset: -2px; }
 .key-legend { margin: 0 0 12px; color: var(--orca-muted-foreground); font-size: 11px; }
 .shortcut-group + .shortcut-group { margin-top: 16px; }
 .shortcut-group h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; }
@@ -114,13 +116,6 @@ article blockquote { margin-left: 0; padding-left: 12px; border-left: 3px solid 
 .shortcut-row dt { overflow-wrap: anywhere; }
 .shortcut-row dd { margin: 0; text-align: right; }
 .shortcut-row kbd { font: 12px/1.5 system-ui, sans-serif; white-space: nowrap; }
-#note-settings { padding: 0; }
-#note-settings[open] { display: flex; flex-direction: column; }
-#note-settings > .help-heading { padding: 12px; border-bottom: 1px solid var(--orca-border); }
-#settings-body { min-height: 0; min-width: 0; padding: 0 12px 16px; overflow: auto; overscroll-behavior: contain; }
-.settings-footer { display: flex; justify-content: flex-end; flex: none; padding: 12px; border-top: 1px solid var(--orca-border); }
-.settings-footer button { padding: 5px 10px; border: 1px solid var(--orca-border); border-radius: 4px; }
-#settings-description { margin: 8px 0 14px; color: var(--orca-muted-foreground); }
 .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 40%); align-items: start; gap: 12px; padding: 14px 0; border-top: 1px solid var(--orca-border); }
 .setting-copy h3 { margin: 0; font-size: 13px; font-weight: 600; }
 .setting-copy p { margin: 4px 0 0; color: var(--orca-muted-foreground); font-size: 12px; }
