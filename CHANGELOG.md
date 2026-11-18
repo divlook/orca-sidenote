@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.8.5
+
+### Patch Changes
+
+- ca46463: Explain when a remote-server worktree cannot use SideNote, with a visible instruction to switch to a local worktree instead of showing “No active worktree.”
+
 ## 0.8.4
 
 ### Patch Changes
