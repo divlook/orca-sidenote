@@ -26,6 +26,8 @@ Opening files requires the `workspace:write` permission. Review and approve the 
 
 The subtitle shows the current project and worktree. During **Switching…**, editing stays disabled until the new collection is ready. An ambiguous or unavailable location blocks editing. A confirmed development installation shows a **DEV** badge.
 
+If the focused worktree is on a remote server and unavailable in the local worktree list, the subtitle shows **Remote worktree not supported**. The panel keeps note editing disabled and displays **Switch to a local worktree to use SideNote.** A genuinely empty focus still shows **No active worktree**; an unidentifiable focus shows **Location unavailable** instead of guessing that it is remote.
+
 ## Code blocks
 
 Reading mode displays fenced code as escaped plain text, regardless of the language name:

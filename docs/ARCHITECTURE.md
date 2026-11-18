@@ -17,6 +17,8 @@ Use the [Glossary](../GLOSSARY.md) for product terminology, [Data](DATA.md) for 
 
 Text-save coalescing replaces only the contiguous waiting tail for the same scope draft; all non-text note operations and focus checks close that tail at initiation. Publish the queue promise and tail before notifying subscribers so reentrant edits or deletion retain write order. See [Save notes](DATA.md#save-notes) for persistence, caller settlement, and pending-count semantics.
 
+When a complete local CLI snapshot has no active target, read the focused workspace context and query the paired environments explicitly named by the snapshot's omitted-host selectors. Match the context's exact workspace ID against complete CLI snapshots, not names or paths alone: remote rows use their own host's identities. One remote match with no local match returns an explicit unsupported-remote focus result; null context means no active workspace. Missing IDs, duplicate matches, truncated lists, failed queries, and focus changes during lookup must not produce a remote diagnosis. This diagnostic lookup never loads a remote note collection or changes note identities.
+
 Create a card's Source editor only when its editing body becomes visible or its first reading-mode task action needs one. Retain the editor, selection, scroll and undo until the card is disposed. Reading-mode links and card controls must not depend on an editor having been created.
 
 The Markdown renderer used in reading mode renders fenced code as escaped plain text regardless of language. DOMPurify sanitizes the rendered Markdown. CodeMirror's source highlighting in editing mode is independent. Mermaid uses the ordinary code path.

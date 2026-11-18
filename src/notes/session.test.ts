@@ -71,6 +71,38 @@ test('new scopes are empty; blank append, independent edits, order and IDs survi
   assert.deepEqual(texts(values, local), ['B', 'A revised'])
 })
 
+test('unsupported remote focus disables editing without loading or overwriting another collection', async () => {
+  const { store, values } = memoryStore({ [noteKey(local)]: 'saved' })
+  const reads: string[] = []
+  const session = new NoteSession({ ...store, get: async key => { reads.push(key); return store.get(key) } }, () => {})
+  await session.follow(async () => local)
+  const key = session.view.notes[0].key
+  await session.follow(async () => ({ unavailable: 'remote' }))
+  assert.equal(session.view.unavailable, 'remote')
+  assert.equal(session.view.ready, false)
+  assert.equal(session.view.target, null)
+  assert.equal(session.view.notes.length, 0)
+  await session.save('wrong host', key)
+  assert.equal(await session.createNote(), undefined)
+  assert.deepEqual(reads, [noteKey(local)])
+  assert.equal(values.get(noteKey(local)), 'saved')
+  await session.follow(async () => local)
+  assert.equal(session.view.unavailable, null)
+  assert.equal(session.view.ready, true)
+  assert.equal(session.view.notes[0].key, key)
+  assert.equal(session.view.notes[0].text, 'saved')
+  const older = Promise.withResolvers<{ unavailable: 'remote' }>()
+  const pending = session.follow(() => older.promise)
+  await session.follow(async () => local)
+  older.resolve({ unavailable: 'remote' })
+  await pending
+  assert.equal(session.view.ready, true)
+  assert.equal(session.view.unavailable, null)
+  await session.follow(async () => null)
+  assert.equal(session.view.unavailable, null)
+  assert.equal(session.view.ready, false)
+})
+
 test('queued snapshots preserve optimistic card edits and never cross focus scopes', async () => {
   const { store, values } = memoryStore({ [noteKey(local)]: 'old' })
   const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()

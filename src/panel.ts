@@ -18,6 +18,7 @@ const element = <T extends HTMLElement>(id: string) => document.querySelector<T>
 const panel = element<HTMLElement>('note-panel')
 const problem = element<HTMLElement>('problem'), retry = element<HTMLButtonElement>('retry')
 const locationLabel = element<HTMLElement>('location'), settingsRoot = element<HTMLDialogElement>('note-settings')
+const locationHelp = element<HTMLElement>('location-help')
 const filterRoot = element<HTMLElement>('note-filter')
 const addButtons = [element<HTMLButtonElement>('add-note-top'), element<HTMLButtonElement>('add-note-bottom')]
 const events = new AbortController(), signal = events.signal
@@ -81,8 +82,10 @@ function render(): void {
   labelSettings.render()
   const target = view.target, basename = target?.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || target?.path
   locationLabel.textContent = view.loading || view.checking && !target ? 'Switching…' : view.problem ? 'Location unavailable'
+    : view.unavailable === 'remote' ? 'Remote worktree not supported'
     : target ? `${target.project ?? basename} · ${target.worktree ?? basename}${target.hostId && target.hostId !== 'local' ? ` · ${target.hostId}` : ''}` : 'No active worktree'
   locationLabel.title = !view.loading && target ? `${target.hostId ?? 'local'}: ${target.path}` : ''
+  locationHelp.hidden = view.unavailable !== 'remote'
   problem.textContent = [preference.problem, view.problem, view.error, catalog.error, filters.view.error, cards.problem, externalError].filter(Boolean).join(' ')
   problem.hidden = !problem.textContent
   const writable = view.ready && preference.ready

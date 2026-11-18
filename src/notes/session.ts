@@ -1,5 +1,5 @@
 import type { JsonValue } from 'orca'
-import { NOTE_KEY_PREFIX, noteKey, parseNoteKey, type NoteTarget } from '../protocol'
+import { NOTE_KEY_PREFIX, noteKey, parseNoteKey, type NoteFocus, type NoteTarget } from '../protocol'
 import { collection, editorKey, readCollection, readStoredCollection, sameCollection, type NoteCollection } from './note-collection'
 import { DEFAULT_LABELS, LABEL_KEY, labelCatalog, readLabels, type NoteLabel, type LabelColor } from './note-labels'
 
@@ -31,13 +31,14 @@ export class NoteSession {
   private checking = false
   private problem = ''
   private target: NoteTarget | null = null
+  private unavailable: 'remote' | null = null
   private deletion: string[] | null = null
   private deleting = false
   private epoch = 0
   private loadEpoch = 0
   private invalidations = new Map<string, number>()
   private unknownWrites = new Set<string>()
-  private resolveTarget: (() => Promise<NoteTarget | null>) | undefined
+  private resolveTarget: (() => Promise<NoteFocus>) | undefined
   private operation: { pending: number } | null = null
   private deletionOperation: NoteOperation | null = null
   private catalog: readonly NoteLabel[] = []
@@ -199,7 +200,7 @@ export class NoteSession {
           pending, error, dirty: saved.get(note.id) !== note.text })),
         dirty: !!draft && !sameCollection(draft.value, draft.saved) }
     }
-    return { scopeKey: this.scopeKey, target: this.target, ready: this.ready,
+    return { scopeKey: this.scopeKey, target: this.target, unavailable: this.unavailable, ready: this.ready,
       notes: this.projection.notes, pending, error, loading: this.loading, checking: this.checking,
       problem: this.problem, dirty: this.projection.dirty, epoch: this.epoch, invalidations: this.invalidations }
   }
@@ -207,19 +208,21 @@ export class NoteSession {
   private fail(error: unknown): void {
     this.scopeKey = ''
     this.target = null
+    this.unavailable = null
     this.loading = false
     this.checking = false
     this.problem = error instanceof Error ? error.message : String(error)
     this.changed()
   }
 
-  async follow(resolveTarget: () => Promise<NoteTarget | null>): Promise<void> {
+  async follow(resolveTarget: () => Promise<NoteFocus>): Promise<void> {
     this.pendingTextSave = undefined
     this.resolveTarget = resolveTarget
     if (this.operation !== null) return
     this.checking = true
     ++this.generation
     this.problem = ''
+    this.unavailable = null
     this.changed()
     const generation = this.generation
     try {
@@ -230,7 +233,9 @@ export class NoteSession {
     }
   }
 
-  private async focus(target: NoteTarget | null): Promise<void> {
+  private async focus(focus: NoteFocus): Promise<void> {
+    this.unavailable = focus && 'unavailable' in focus ? focus.unavailable : null
+    const target = focus && 'path' in focus ? focus : null
     const generation = ++this.generation
     const epoch = this.loadEpoch
     const key = target ? noteKey(target) : ''

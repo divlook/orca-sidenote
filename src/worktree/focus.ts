@@ -1,4 +1,4 @@
-import type { NoteTarget } from '../protocol'
+import type { NoteFocus, NoteTarget } from '../protocol'
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -26,4 +26,25 @@ export function focusedTarget(snapshot: unknown): NoteTarget | null {
     else if (typeof row.branch === 'string' && row.branch.trim()) target.worktree = row.branch.replace(/^refs\/heads\//, '')
   }
   return target
+}
+
+export function missingFocus(context: unknown, local: unknown, remotes: readonly unknown[]): NoteFocus {
+  if (context === null) return null
+  if (!record(context) || typeof context.workspaceId !== 'string' || !context.workspaceId) {
+    throw new Error('The current worktree cannot be identified uniquely.')
+  }
+  let localMatches = 0, remoteMatches = 0
+  for (const [index, snapshot] of [local, ...remotes].entries()) {
+    focusedTarget(snapshot)
+    if (!record(snapshot) || !record(snapshot.result) || !Array.isArray(snapshot.result.worktrees)) {
+      throw new Error('The worktree information has an invalid format.')
+    }
+    for (const row of snapshot.result.worktrees) {
+      if (!record(row) || row.worktreeId !== context.workspaceId) continue
+      if (index === 0) localMatches++
+      else remoteMatches++
+    }
+  }
+  if (localMatches === 0 && remoteMatches === 1) return { unavailable: 'remote' }
+  throw new Error('The current worktree cannot be identified uniquely.')
 }

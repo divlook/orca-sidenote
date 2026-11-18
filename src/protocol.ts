@@ -1,4 +1,5 @@
 export type NoteTarget = { path: string; hostId: string | null; project?: string; worktree?: string }
+export type NoteFocus = NoteTarget | { unavailable: 'remote' } | null
 
 export const NOTE_KEY_PREFIX = 'note:v1:'
 
@@ -18,7 +19,7 @@ export function noteKey(workspace: NoteTarget): string {
 
 declare module 'orca' {
   interface PluginRequests {
-    'notes.focused': { output: NoteTarget | null }
+    'notes.focused': { output: NoteFocus }
     'notes.devStatus': { output: true | null }
     'notes.openLink': { input: { scope: string; href: string }; output: null }
   }

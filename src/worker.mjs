@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { focusedTarget } from './worktree/focus.ts'
+import { focusedTarget, missingFocus } from './worktree/focus.ts'
 import { openNoteLink } from './worktree/note-link-routing.ts'
 
 // Use this installation's CLI: the plugin context API omits the focused workspace ID.
@@ -51,5 +51,20 @@ export default function activate(orca) {
     })
     return devStatus
   })
-  orca.panels.handle('notes.focused', async () => focusedTarget(JSON.parse(await execute(worktreeArgs))))
+  orca.panels.handle('notes.focused', async () => {
+    const generation = focusGeneration
+    const local = JSON.parse(await execute(worktreeArgs))
+    const target = focusedTarget(local)
+    if (target) return target
+    const context = await orca.host.call('workspace.readContext')
+    const selectors = local.result.hostScope?.omittedHostSelectors ?? []
+    const remotes = context === null ? [] : await Promise.all(selectors.map(async row => {
+      if (typeof row.selector !== 'string' || !row.selector.startsWith('--environment ') || !row.selector.slice(14)) {
+        throw new Error('The remote worktree list cannot be read.')
+      }
+      return JSON.parse(await execute(['worktree', 'ps', '--environment', row.selector.slice(14), '--limit', '10000', '--json']))
+    }))
+    if (generation !== focusGeneration) throw new Error('The active worktree changed. Wait for the current location.')
+    return missingFocus(context, local, remotes)
+  })
 }
