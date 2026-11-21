@@ -6,6 +6,7 @@ import { DEFAULT_LABELS, LABEL_KEY, labelCatalog, readLabels, type NoteLabel, ty
 export type NoteStore = { get(key: string): Promise<unknown>; set(key: string, value: JsonValue): Promise<void>;
   keys(): Promise<string[]>; delete(key: string): Promise<void> }
 export type RecoveryCollection = { hostId: string | null; path: string; notes: NoteCollection['notes'] }
+export type OperationFocus = Readonly<{ key: string; revision: number }>
 export interface NoteOperation {
   get(key: string): Promise<unknown>
   read(key: string): Promise<NoteCollection | null>
@@ -13,9 +14,12 @@ export interface NoteOperation {
   recoveryCollections(): RecoveryCollection[]
   refreshCleanDrafts(states: ReadonlyMap<string, NoteCollection | null>): void
   reconcile(): Promise<void>
+  focused(): Promise<OperationFocus>
+  assertFocus(focus: OperationFocus): void
+  writeFocused(focus: OperationFocus, before: NoteCollection | null, value: NoteCollection, labels: readonly NoteLabel[]): Promise<{ error: unknown } | null>
   write(key: string, value: NoteCollection): Promise<void>
   labels(): Promise<readonly NoteLabel[]>
-  writeLabels(labels: readonly NoteLabel[]): Promise<void>
+  writeLabels(labels: readonly NoteLabel[], guard?: { focus: OperationFocus; before: readonly NoteLabel[] }): Promise<void>
   finish(): Promise<void>
 }
 type ScopeDraft = { value: NoteCollection; saved: NoteCollection; pending: number; error: string; revision: number; removed: Set<string> }
@@ -25,6 +29,7 @@ export class NoteSession {
   private scopeDrafts = new Map<string, ScopeDraft>()
   private scopeKey = ''
   private generation = 0
+  private focusRevision = 0
   private writes = Promise.resolve()
   private pendingTextSave: PendingSave | undefined
   private loading = false
@@ -218,6 +223,7 @@ export class NoteSession {
   async follow(resolveTarget: () => Promise<NoteFocus>): Promise<void> {
     this.pendingTextSave = undefined
     this.resolveTarget = resolveTarget
+    ++this.focusRevision
     if (this.operation !== null) return
     this.checking = true
     ++this.generation
@@ -485,13 +491,61 @@ export class NoteSession {
       operation.pending++
       try { return await action() } finally { operation.pending-- }
     }
+    const assertFocus = (focus: OperationFocus) => {
+      assertLive()
+      if (focus.revision !== this.focusRevision) throw new Error('Workspace focus changed. Preview the copy again.')
+    }
+    const focused = async (): Promise<OperationFocus> => {
+      const revision = this.focusRevision
+      const target = await this.resolveTarget?.()
+      if (!target || typeof target !== 'object' || 'unavailable' in target || typeof target.path !== 'string' || !target.path
+        || (target.hostId !== null && typeof target.hostId !== 'string')) {
+        throw new Error('No workspace could be confirmed. Focus the destination and preview the copy again.')
+      }
+      const focus = Object.freeze({ key: noteKey(target), revision })
+      assertFocus(focus)
+      return focus
+    }
+    const verifyFocus = async (focus: OperationFocus) => {
+      assertFocus(focus)
+      if ((await focused()).key !== focus.key) throw new Error('The current workspace changed. Preview the copy again.')
+      assertFocus(focus)
+    }
+    const checkLabels = async (expected: readonly NoteLabel[]) => {
+      if (JSON.stringify(readLabels(await this.store.get(LABEL_KEY))) !== JSON.stringify(expected)) {
+        throw new Error('Destination labels changed. Preview the copy again.')
+      }
+    }
+    const persist = async (key: string, snapshot: NoteCollection) => {
+      try { await this.store.set(key, snapshot as unknown as JsonValue) }
+      catch (error) { this.unknownWrites.add(key); return { error } }
+      this.invalidate(key, this.scopeDrafts.get(key)?.value ?? collection([]), snapshot)
+      this.scopeDrafts.set(key, this.draft(snapshot))
+      this.unknownWrites.delete(key)
+      this.changed()
+      return null
+    }
+    const queue = <T>(action: () => Promise<T>): Promise<T> => {
+      const write = this.writes.then(action)
+      this.writes = write.then(() => {}, () => {})
+      return write
+    }
     await this.writes
     return {
       get: key => run(() => this.store.get(key)),
       read: key => run(() => readStoredCollection(this.store, key)),
       keys: () => run(() => this.store.keys()),
       labels: () => run(async () => readLabels(await this.store.get(LABEL_KEY))),
-      writeLabels: labels => run(() => this.persistLabels(labels)),
+      focused: () => run(focused),
+      assertFocus,
+      writeLabels: (labels, guard) => run(async () => {
+        if (guard) {
+          await verifyFocus(guard.focus)
+          await checkLabels(guard.before)
+          assertFocus(guard.focus)
+        }
+        await this.persistLabels(labels)
+      }),
       recoveryCollections: () => { assertLive(); return this.recoveryCollections() },
       refreshCleanDrafts: states => {
         assertLive()
@@ -503,21 +557,23 @@ export class NoteSession {
       write: (key, value) => run(async () => {
         parseNoteKey(key)
         const snapshot = readCollection(value)
-        const write = this.writes.then(async () => {
-          try {
-            await this.store.set(key, snapshot as unknown as JsonValue)
-            this.invalidate(key, this.scopeDrafts.get(key)?.value ?? collection([]), snapshot)
-            this.scopeDrafts.set(key, this.draft(snapshot))
-            this.unknownWrites.delete(key)
-            this.changed()
-          } catch (error) {
-            this.unknownWrites.add(key)
-            throw error
-          }
+        await queue(async () => {
+          const failure = await persist(key, snapshot)
+          if (failure) throw failure.error
         })
-        this.writes = write.catch(() => {})
-        await write
       }),
+      writeFocused: (focus, before, value, labels) => run(() => queue(async () => {
+        await verifyFocus(focus)
+        await checkLabels(labels)
+        const current = await readStoredCollection(this.store, focus.key)
+        if (current === null ? before !== null : before === null || !sameCollection(current, before)) {
+          throw new Error('Destination notes changed. Preview the copy again.')
+        }
+        // Storage reads may finish before the panel receives a focus change event.
+        await verifyFocus(focus)
+        assertFocus(focus)
+        return persist(focus.key, value)
+      })),
       finish: async () => {
         assertLive()
         if (operation.pending) throw new Error('Wait for the in-flight note before closing.')

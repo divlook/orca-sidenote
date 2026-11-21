@@ -5,6 +5,7 @@ import { archive, decodeArchive, encodeArchive, planRestore, ARCHIVE_BYTES } fro
 import { collection, editorKey, readCollection } from '../notes/note-collection'
 import { NoteSession, type NoteStore } from '../notes/session'
 import { noteKey } from '../protocol'
+import { readLabels } from '../notes/note-labels'
 import { NotesTransfer } from './notes-transfer'
 
 const first = { hostId: null, path: '/Case/é\\"\u0000',
@@ -291,4 +292,118 @@ test('identical restore refreshes stale clean collections but keeps unchanged ca
   assert.equal(session.view.notes[0].text, first.notes[0].text)
   assert.equal(session.view.invalidations.has(editorKey(key, 'legacy')), true)
   assert.equal(session.view.invalidations.has(editorKey(key, 'second')), false)
+})
+
+test('backup copy appends only selected notes with fresh IDs and exact source text', async () => {
+  const target = { hostId: 'local', path: first.path }
+  const original = collection([{ id: 'legacy', text: 'destination' }, { id: 'keep', text: '' }])
+  const storedSource = collection([{ id: 'live', text: 'live source\r\nunchanged' }])
+  const { session, notesTransfer: transfer, values, writes } = fixture([
+    [noteKey(target), original], [noteKey(first), storedSource], ['settings:v1', 'keep']])
+  const sourceBytes = JSON.stringify(values.get(noteKey(first)))
+  await session.follow(async () => target); await transfer.beginTransfer()
+  const value = archive([{ ...first, notes: [...first.notes, { id: 'unselected', text: 'do not copy' }] }, second], [])
+  const plan = await transfer.previewCopy(value, { key: noteKey(first), source: 'notes', noteIds: ['second', 'legacy'] })
+  assert.deepEqual(plan.source, { key: noteKey(first), source: 'notes' })
+  assert.equal(plan.target, noteKey(target))
+  assert.equal(plan.destinationCount, 2)
+  assert.deepEqual(plan.notes.map(note => note.text), first.notes.map(note => note.text))
+  assert.equal(new Set([...original.notes, ...plan.notes].map(note => note.id)).size, 4)
+  assert.ok(plan.notes.every(note => !first.notes.some(source => source.id === note.id)))
+  await transfer.commitCopy(plan, true)
+  assert.deepEqual(readCollection(values.get(noteKey(target))).notes, [...original.notes, ...plan.notes])
+  assert.equal(JSON.stringify(values.get(noteKey(first))), sourceBytes)
+  assert.ok(!writes.includes(noteKey(first)))
+  assert.equal(values.get('settings:v1'), 'keep')
+  await transfer.finishTransfer()
+})
+
+test('backup copy imports only selected labels and reuses matching destination labels', async () => {
+  const target = { hostId: null, path: '/copy-target' }
+  const labels = [{ id: 'used', name: 'New', color: 'red' as const },
+    { id: 'reuse', name: 'Done', color: 'green' as const }, { id: 'unused', name: 'Unused', color: 'blue' as const }]
+  const existing = [{ id: 'existing', name: 'done', color: 'green' as const }]
+  const source = { ...first, notes: [{ id: 'a', text: 'a', labelId: 'used' },
+    { id: 'b', text: 'b', labelId: 'reuse' }, { id: 'c', text: 'c', labelId: 'unused' }] }
+  const { session, notesTransfer: transfer, values } = fixture([['labels:v1', { version: 1, labels: existing }]])
+  await session.follow(async () => target); await transfer.beginTransfer()
+  const plan = await transfer.previewCopy(archive([source], [], labels),
+    { key: noteKey(source), source: 'notes', noteIds: ['a', 'b'] })
+  assert.equal(plan.addedLabels, 1)
+  await transfer.commitCopy(plan, true)
+  const copied = readCollection(values.get(noteKey(target))).notes
+  const merged = readLabels(values.get('labels:v1'))
+  assert.deepEqual(merged.map(label => label.name), ['done', 'New'])
+  assert.equal(copied[0].labelId, merged[1].id)
+  assert.equal(copied[1].labelId, 'existing')
+  await transfer.finishTransfer()
+})
+
+test('backup copy rejects changed focus and destination without writing', async () => {
+  for (const change of ['focus', 'destination'] as const) {
+    const target = { hostId: null, path: '/copy-target' }
+    const { session, notesTransfer: transfer, values, writes } = fixture([[noteKey(target), 'original']])
+    await session.follow(async () => target); await transfer.beginTransfer()
+    const plan = await transfer.previewCopy(archive([first], []),
+      { key: noteKey(first), source: 'notes', noteIds: ['legacy'] })
+    if (change === 'focus') await session.follow(async () => second)
+    else values.set(noteKey(target), 'changed elsewhere')
+    await assert.rejects(() => transfer.commitCopy(plan, true))
+    assert.deepEqual(writes, [])
+    await transfer.finishTransfer()
+  }
+})
+
+test('backup copy rejects focus changed during the final destination read before notification', async () => {
+  const target = { hostId: null, path: '/copy-target' }
+  const other = { hostId: 'other-host', path: target.path }
+  const key = noteKey(target), otherKey = noteKey(other), sourceKey = noteKey(first)
+  const { store, values, writes } = fixture([[key, 'original'], [otherKey, 'other'], [sourceKey, 'source']])
+  let focused: { hostId: string | null; path: string } = target
+  let committing = false, reads = 0
+  const session = new NoteSession({ ...store, get: async requested => {
+    // The first destination read during commit is quota preflight.
+    if (committing && requested === key && ++reads === 2) focused = other
+    return store.get(requested)
+  } }, () => {})
+  const transfer = new NotesTransfer(session)
+  await session.follow(async () => focused)
+  await transfer.beginTransfer()
+  const plan = await transfer.previewCopy(archive([first], []), { key: sourceKey, source: 'notes', noteIds: ['legacy'] })
+  committing = true
+  await assert.rejects(() => transfer.commitCopy(plan, true), /workspace changed.*preview the copy again/i)
+  assert.deepEqual(writes, [])
+  assert.equal(values.get(key), 'original')
+  assert.equal(values.get(otherKey), 'other')
+  assert.equal(values.get(sourceKey), 'source')
+  await transfer.finishTransfer()
+})
+
+test('backup copy rejects a failed destination draft without writing', async () => {
+  const target = { hostId: null, path: '/copy-target' }
+  const { store, values, writes } = fixture([[noteKey(target), 'saved']])
+  const session = new NoteSession({ ...store, set: async () => { throw new Error('save failed') } }, () => {})
+  const transfer = new NotesTransfer(session)
+  await session.follow(async () => target)
+  await session.save('', session.view.notes[0].key)
+  await transfer.beginTransfer()
+  await assert.rejects(() => transfer.previewCopy(archive([first], []),
+    { key: noteKey(first), source: 'notes', noteIds: ['legacy'] }))
+  assert.equal(values.get(noteKey(target)), 'saved')
+  assert.deepEqual(writes, [])
+  await transfer.finishTransfer()
+})
+
+test('backup copy selects recovery rather than the persisted collection for the same identity', async () => {
+  const target = { hostId: null, path: '/copy-target' }
+  const recovery = { ...first, notes: [{ id: 'legacy', text: 'recovered\r\ntext' }] }
+  const { session, notesTransfer: transfer, values } = fixture()
+  await session.follow(async () => target); await transfer.beginTransfer()
+  const plan = await transfer.previewCopy(archive([first], [recovery]),
+    { key: noteKey(first), source: 'recoveryDrafts', noteIds: ['legacy'] })
+  assert.deepEqual(plan.source, { key: noteKey(first), source: 'recoveryDrafts' })
+  assert.deepEqual(plan.notes.map(note => note.text), ['recovered\r\ntext'])
+  await transfer.commitCopy(plan, true)
+  assert.deepEqual(readCollection(values.get(noteKey(target))).notes, plan.notes)
+  await transfer.finishTransfer()
 })

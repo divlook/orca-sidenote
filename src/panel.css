@@ -97,8 +97,8 @@ article blockquote { margin-left: 0; padding-left: 12px; border-left: 3px solid 
   color: var(--orca-foreground); background: var(--orca-background); font: inherit; }
 .panel-dialog[open] { display: flex; flex-direction: column; }
 .panel-dialog::backdrop { background: rgb(0 0 0 / 45%); }
-.help-heading, .dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
-.help-heading h2, .dialog-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+.dialog-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .dialog-heading { padding: 12px; border-bottom: 1px solid var(--orca-border); }
 .dialog-body { min-height: 0; min-width: 0; padding: 0 12px 16px; overflow: auto; overscroll-behavior: contain; }
 .dialog-footer { display: flex; justify-content: flex-end; flex: none; padding: 12px; border-top: 1px solid var(--orca-border); }
@@ -130,10 +130,10 @@ article blockquote { margin-left: 0; padding-left: 12px; border-left: 3px solid 
 #settings-error { color: var(--orca-destructive); }
 .settings-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 button:disabled { cursor: default; opacity: .5; }
-#delete-note, #delete-notes, #note-transfer, #open-note-link { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
+#delete-note, #delete-notes, #open-note-link { width: calc(100% - 24px); max-width: 440px; max-height: calc(100% - 24px);
   margin: auto; padding: 12px; overflow: auto; border: 1px solid var(--orca-border); border-radius: 8px;
   color: var(--orca-foreground); background: var(--orca-background); font: inherit; }
-#delete-note::backdrop, #delete-notes::backdrop, #note-transfer::backdrop, #open-note-link::backdrop { background: rgb(0 0 0 / 45%); }
+#delete-note::backdrop, #delete-notes::backdrop, #open-note-link::backdrop { background: rgb(0 0 0 / 45%); }
 #delete-note h2, #delete-notes h2 { margin: 0; font-size: 14px; }
 .delete-section { margin-top: 20px; border-top: 1px solid var(--orca-border); }
 #delete-notes-open { color: var(--orca-foreground); text-decoration: underline; }
@@ -145,14 +145,18 @@ button:disabled { cursor: default; opacity: .5; }
 .data-section { margin-top: 20px; border-top: 1px solid var(--orca-border); }
 .data-section h3 { margin: 14px 0 0; font-size: 13px; }
 #transfer-open { padding: 6px 8px; border: 1px solid var(--orca-border); border-radius: 4px; }
-#note-transfer section { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--orca-border); }
-#note-transfer label { display: block; margin: 8px 0; }
-#note-transfer button { margin: 4px 4px 4px 0; padding: 6px 8px; border: 1px solid var(--orca-border); border-radius: 4px; }
-#transfer-candidates { max-height: 240px; overflow: auto; overscroll-behavior: contain; }
+#note-transfer .dialog-heading { justify-content: flex-start; }
+#transfer-body { overflow-wrap: anywhere; }
+#transfer-body section { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--orca-border); }
+#transfer-body label { display: block; margin: 8px 0; }
+#transfer-body button { margin: 4px 4px 4px 0; padding: 6px 8px; border: 1px solid var(--orca-border); border-radius: 4px; }
 #transfer-candidates fieldset { min-width: 0; margin: 8px 0; border: 1px solid var(--orca-border); }
 #transfer-candidates legend { max-width: 100%; overflow-wrap: anywhere; }
-#transfer-candidates select, #transfer-file { max-width: 100%; font: inherit; }
-#transfer-candidates select { width: 100%; color: var(--orca-foreground); background: var(--orca-background); }
+#transfer-body select, #transfer-file { max-width: 100%; font: inherit; }
+#transfer-body select { color: var(--orca-foreground); background: var(--orca-background); }
+#transfer-candidates select, #transfer-copy-source { width: 100%; }
+#transfer-copy-notes { min-width: 0; border: 1px solid var(--orca-border); }
+#transfer-copy-details pre { white-space: pre-wrap; }
 .note-card-removing { overflow: clip; pointer-events: none; flex-shrink: 0; }
 .note-card-removing .card-toolbar { position: static; }
 .note-removal-active { overflow-anchor: none; }

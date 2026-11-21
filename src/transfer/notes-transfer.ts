@@ -1,13 +1,25 @@
-import { NOTE_KEY_PREFIX, parseNoteKey } from '../protocol'
+import { NOTE_KEY_PREFIX, noteKey, parseNoteKey } from '../protocol'
 import { ARCHIVE_BYTES, ARCHIVE_RECORDS, archive, encodeArchive, planRestore, validateArchive, type NoteArchive, type RestoreChoice, type RestorePlan } from './note-archive'
-import type { NoteSession, NoteOperation } from '../notes/session'
+import type { NoteSession, NoteOperation, OperationFocus } from '../notes/session'
 import { collection, sameCollection, type NoteCollection } from '../notes/note-collection'
-import { LABEL_KEY } from '../notes/note-labels'
+import { LABEL_KEY, mergeLabels } from '../notes/note-labels'
 
 const HOST_KEY_CHARACTERS = 256
 const HOST_KEYS = 1024
 const HOST_STORE_BYTES = 5242880
 const HOST_VALUE_BYTES = 262144
+
+export type CopyChoice = Readonly<{ key: string; source: RestoreChoice['source']; noteIds: readonly string[] }>
+export type CopyPlan = Readonly<{ source: Pick<CopyChoice, 'key' | 'source'>; target: string; notes: NoteCollection['notes'];
+  destinationCount: number; addedLabels: number }>
+type CopyPreview = { plan: CopyPlan; focus: OperationFocus; before: NoteCollection | null;
+  next: NoteCollection; labels: RestorePlan['labels']; beforeLabels: RestorePlan['beforeLabels'] }
+
+function* restoreWrites(plan: RestorePlan) {
+  for (const item of plan.items) if (item.action === 'create' || item.action === 'replace') {
+    yield [item.key, collection(item.note.notes)] as const
+  }
+}
 
 export class NotesTransfer {
   private operation: NoteOperation | null = null
@@ -15,6 +27,8 @@ export class NotesTransfer {
   private transferBusy = false
   private restore: RestorePlan | null = null
   private protectedPlan: RestorePlan | null = null
+  private copy: CopyPreview | null = null
+  private unknownCopies = new Set<string>()
   private stopped = false
 
   constructor(private session: NoteSession) {}
@@ -37,7 +51,8 @@ export class NotesTransfer {
     if (key.length > HOST_KEY_CHARACTERS) throw new Error(`Note identity exceeds the host 256-character storage-key limit: ${key}`)
     return this.lease().read(key)
   }
-  private async preflightStorage(plan: RestorePlan): Promise<void> {
+  private async preflightStorage(plan: Pick<RestorePlan, 'labels' | 'beforeLabels'>,
+    writes: Iterable<readonly [string, NoteCollection]>, action: 'Restore' | 'Copy'): Promise<void> {
     const keys = await this.lease().keys()
     if (keys.length > HOST_KEYS) throw new Error('The plugin store exceeds the host key limit.')
     const contents: Record<string, unknown> = Object.create(null)
@@ -51,28 +66,26 @@ export class NotesTransfer {
     if (bytes > HOST_STORE_BYTES) throw new Error('The plugin store exceeds the host 5 MiB limit.')
     if (JSON.stringify(plan.labels) !== JSON.stringify(plan.beforeLabels)) {
       const catalog = { version: 1, labels: plan.labels }
-      if (encoder.encode(JSON.stringify(catalog)).byteLength > HOST_VALUE_BYTES) throw new Error('The restored label catalog exceeds the host stored-value limit.')
+      if (encoder.encode(JSON.stringify(catalog)).byteLength > HOST_VALUE_BYTES) throw new Error(`The ${action === 'Restore' ? 'restored' : 'copied'} label catalog exceeds the host stored-value limit.`)
       const singleton = encoder.encode(JSON.stringify({ [LABEL_KEY]: catalog }, null, 2)).byteLength
       if (Object.hasOwn(contents, LABEL_KEY)) bytes += singleton - encoder.encode(JSON.stringify({ [LABEL_KEY]: contents[LABEL_KEY] }, null, 2)).byteLength
       else { bytes += singleton - 2; ++count }
-      if (count > HOST_KEYS || bytes > HOST_STORE_BYTES) throw new Error('Restore exceeds the host plugin-store limit. Nothing was written.')
+      if (count > HOST_KEYS || bytes > HOST_STORE_BYTES) throw new Error(`${action} exceeds the host plugin-store limit. Nothing was written.`)
     }
-    for (const item of plan.items) {
-      if (item.action !== 'create' && item.action !== 'replace') continue
-      const value = collection(item.note.notes)
+    for (const [key, value] of writes) {
       if (encoder.encode(JSON.stringify(value)).byteLength > HOST_VALUE_BYTES) {
-        throw new Error(`Note collection exceeds the host 262,144-byte stored-value limit: ${item.key}`)
+        throw new Error(`Note collection exceeds the host 262,144-byte stored-value limit: ${key}`)
       }
-      const singleton = encoder.encode(JSON.stringify({ [item.key]: value }, null, 2)).byteLength
-      if (Object.hasOwn(contents, item.key)) {
-        bytes += singleton - encoder.encode(JSON.stringify({ [item.key]: contents[item.key] }, null, 2)).byteLength
+      const singleton = encoder.encode(JSON.stringify({ [key]: value }, null, 2)).byteLength
+      if (Object.hasOwn(contents, key)) {
+        bytes += singleton - encoder.encode(JSON.stringify({ [key]: contents[key] }, null, 2)).byteLength
       } else {
         bytes += singleton - 2
         ++count
       }
-      contents[item.key] = value
+      contents[key] = value
       if (count > HOST_KEYS || bytes > HOST_STORE_BYTES) {
-        throw new Error('Restore exceeds the host 1,024-key or 5 MiB plugin-store limit. Nothing was written.')
+        throw new Error(`${action} exceeds the host 1,024-key or 5 MiB plugin-store limit. Nothing was written.`)
       }
     }
   }
@@ -102,6 +115,7 @@ export class NotesTransfer {
   async previewRestore(value: NoteArchive, choices: readonly RestoreChoice[]): Promise<RestorePlan> {
     if (!this.transferring || this.transferBusy) throw new Error('Open an idle notes transfer first.')
     this.restore = this.protectedPlan = null
+    this.copy = null
     this.transferBusy = true
     try {
       const snapshot = validateArchive(value)
@@ -114,7 +128,7 @@ export class NotesTransfer {
       }
       this.lease().refreshCleanDrafts(states)
       const plan = planRestore(snapshot, choices, states, this.lease().recoveryCollections(), await this.lease().labels())
-      await this.preflightStorage(plan)
+      await this.preflightStorage(plan, restoreWrites(plan), 'Restore')
       this.restore = plan
       return plan
     } finally { this.transferBusy = false }
@@ -139,7 +153,7 @@ export class NotesTransfer {
     let failed: string | null = null
     let error = ''
     try {
-      await this.preflightStorage(plan)
+      await this.preflightStorage(plan, restoreWrites(plan), 'Restore')
       if (JSON.stringify(await this.lease().labels()) !== JSON.stringify(plan.beforeLabels)) {
         this.restore = this.protectedPlan = null
         throw new Error('Destination labels changed. Prepare a new preview and protection file.')
@@ -175,12 +189,102 @@ export class NotesTransfer {
     } finally { this.transferBusy = false }
   }
 
+  async previewCopy(value: NoteArchive, choice: CopyChoice): Promise<CopyPlan> {
+    if (!this.transferring || this.transferBusy) throw new Error('Open an idle notes transfer first.')
+    this.restore = this.protectedPlan = this.copy = null
+    this.transferBusy = true
+    try {
+      const snapshot = validateArchive(value)
+      encodeArchive(snapshot)
+      const candidate = snapshot[choice.source]?.find(note => noteKey(note) === choice.key)
+      if (!candidate) throw new Error('Choose a source collection from the backup.')
+      const ids = new Set(choice.noteIds)
+      const selected = candidate.notes.filter(note => ids.has(note.id))
+      if (!selected.length || selected.length !== ids.size || ids.size !== choice.noteIds.length) {
+        throw new Error('Select one or more notes from the chosen source collection.')
+      }
+      const operation = this.lease()
+      const focus = await operation.focused()
+      if (this.unknownCopies.has(focus.key)) {
+        throw new Error('A previous copy could not be verified. Close the transfer and inspect the destination before retrying. To prevent duplicates, this panel will not copy there again until reloaded.')
+      }
+      await operation.reconcile()
+      const before = await this.stored(focus.key)
+      operation.refreshCleanDrafts(new Map([[focus.key, before]]))
+      this.checkCopyDraft(focus.key)
+      const beforeLabels = await operation.labels()
+      const { labels, remap } = mergeLabels(beforeLabels, snapshot.labels, new Set(selected.flatMap(note => note.labelId ? [note.labelId] : [])))
+      const taken = new Set(candidate.notes.map(note => note.id))
+      for (const note of before?.notes ?? []) taken.add(note.id)
+      const copied = selected.map(note => {
+        let id: string
+        do { id = crypto.randomUUID() } while (taken.has(id))
+        taken.add(id)
+        return { id, text: note.text, labelId: note.labelId === undefined ? undefined : remap.get(note.labelId) }
+      })
+      const next = collection([...(before?.notes ?? []), ...copied])
+      const destinationCount = before?.notes.length ?? 0
+      const plan: CopyPlan = Object.freeze({ source: Object.freeze({ key: choice.key, source: choice.source }),
+        target: focus.key, notes: Object.freeze(next.notes.slice(destinationCount)), destinationCount, addedLabels: labels.length - beforeLabels.length })
+      const preview = { plan, focus, before, next, labels, beforeLabels }
+      await this.preflightStorage(preview, [[focus.key, next]], 'Copy')
+      operation.assertFocus(focus)
+      this.copy = preview
+      return plan
+    } finally { this.transferBusy = false }
+  }
+
+  private checkCopyDraft(key: string) {
+    if (this.lease().recoveryCollections().some(draft => noteKey(draft) === key)) {
+      throw new Error('The destination has an unsaved draft in this panel. Close the transfer, save the draft, then preview the copy again.')
+    }
+  }
+
+  async commitCopy(plan: CopyPlan, confirmed: boolean): Promise<void> {
+    const preview = this.copy
+    if (!this.transferring || this.transferBusy || !preview || plan !== preview.plan) throw new Error('Prepare a fresh copy preview.')
+    if (!confirmed) throw new Error('Confirm the destination before copying notes.')
+    this.transferBusy = true
+    this.copy = null
+    let labelsAttempted = false
+    try {
+      const operation = this.lease(), { focus, before, next, beforeLabels, labels } = preview
+      operation.assertFocus(focus)
+      if ((await operation.focused()).key !== focus.key) throw new Error('The current workspace changed. Preview the copy again.')
+      operation.assertFocus(focus)
+      this.checkCopyDraft(focus.key)
+      await this.preflightStorage(preview, [[focus.key, next]], 'Copy')
+      if (plan.addedLabels) {
+        const current = await this.stored(focus.key)
+        if (current === null ? before !== null : before === null || !sameCollection(current, before)) {
+          throw new Error('Destination notes changed. Preview the copy again.')
+        }
+        labelsAttempted = true
+        await operation.writeLabels(labels, { focus, before: beforeLabels })
+      }
+      const failure = await operation.writeFocused(focus, before, next, labels)
+      if (failure) {
+        let saved: NoteCollection | null = null
+        try { saved = await this.stored(focus.key) } catch { /* The write outcome remains unknown. */ }
+        if (!saved || !sameCollection(saved, next)) {
+          this.unknownCopies.add(focus.key)
+          throw new Error('Could not verify whether the notes were copied. Close the transfer and inspect the destination before retrying. To prevent duplicates, this panel will not copy there again until reloaded.')
+        }
+        operation.refreshCleanDrafts(new Map([[focus.key, saved]]))
+      }
+    } catch (error) {
+      if (labelsAttempted) throw new Error(`${error instanceof Error ? error.message : String(error)} The label catalog may already contain new labels.`)
+      throw error
+    } finally { this.transferBusy = false }
+  }
+
   async finishTransfer(): Promise<void> {
     if (this.transferBusy) throw new Error('Wait for the in-flight note before closing.')
     const operation = this.operation
     this.operation = null
     this.transferring = false
     this.restore = this.protectedPlan = null
+    this.copy = null
     if (operation) await operation.finish()
   }
 }

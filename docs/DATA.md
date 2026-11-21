@@ -49,6 +49,17 @@ Restore stops on the first failed request. Its outcome may be unknown. Earlier w
 
 **Stop after in-flight note** stops before the next collection write. It does not cancel an in-flight request or roll back earlier writes.
 
+## Copy notes to the current workspace
+
+Copy appends selected backup notes to the current workspace with new IDs; it does not replace existing notes or change the backup. The source is identified by its exact host and path, not by a guessed path or project name. Save or copy unsaved content in other Note panels and close them before starting the transfer.
+
+1. Focus the destination workspace and start transfer as described under [Back up notes](#back-up-notes).
+2. Choose a **Backup file** and select **Copy to current workspace** under **Use backup to**.
+3. Choose a **Source collection**, either a **Persisted collection** or a **Recovery draft**, and select the notes to copy.
+4. Select **Preview selected copy**. Check the displayed source and destination, then check **Append the selected notes as new notes to the destination shown above.** and select **Copy selected notes**.
+
+Copy merges only labels needed by selected notes, following the same matching and conflict rules as restore. A label write may succeed even if the note write fails. If the copy outcome cannot be verified, close the transfer and inspect the destination before retrying; this panel will not copy there again until reloaded. If the destination or focus changes, prepare a new preview. Save or recover failed destination drafts before copying. Storage quotas still apply.
+
 ## Delete all notes
 
 Deletion cannot be undone. Copy important notes elsewhere before confirming. Close other Note panels first to avoid concurrent edits. Other Orca servers have separate stores.
