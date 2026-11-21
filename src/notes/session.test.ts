@@ -103,6 +103,44 @@ test('unsupported remote focus disables editing without loading or overwriting a
   assert.equal(session.view.ready, false)
 })
 
+test('unconfirmed note stores block local labels and deletion without touching storage or losing drafts', async () => {
+  const { store, values } = memoryStore({ [noteKey(local)]: 'saved' })
+  let reads = 0
+  const session = new NoteSession({
+    ...store,
+    get: async key => { reads++; return store.get(key) },
+    keys: async () => { reads++; return store.keys() },
+    set: async () => { throw new Error('could not save') }
+  }, () => {})
+  await assert.rejects(() => session.prepareDeletion(), /store is unavailable/)
+  assert.equal(reads, 0)
+  await session.follow(async () => local)
+  await session.loadLabels()
+  await session.save('unsaved draft', session.view.notes[0].key)
+  const before = reads
+  const pending = Promise.withResolvers<never>()
+  const following = session.follow(() => pending.promise)
+  for (const phase of ['checking', 'unconfirmed', 'unsupported']) {
+    assert.equal(session.localStoreAvailable, false, phase)
+    assert.equal(session.labels.ready, false, phase)
+    await assert.rejects(() => session.loadLabels(), /store is unavailable/)
+    await assert.rejects(() => session.addLabel('wrong store', 'red'), /label catalog/)
+    await assert.rejects(() => session.prepareLabelDeletion(null), /store is unavailable/)
+    await assert.rejects(() => session.prepareDeletion(), /store is unavailable/)
+    if (phase === 'checking') {
+      pending.reject(new Error('could not confirm focus'))
+      await following
+    } else if (phase === 'unconfirmed') {
+      await session.follow(async () => ({ unavailable: 'remote' }))
+    }
+  }
+  assert.equal(reads, before)
+  assert.equal(values.get(noteKey(local)), 'saved')
+  await session.follow(async () => local)
+  assert.equal(session.labels.ready, true)
+  assert.equal(session.view.notes[0].text, 'unsaved draft')
+})
+
 test('queued snapshots preserve optimistic card edits and never cross focus scopes', async () => {
   const { store, values } = memoryStore({ [noteKey(local)]: 'old' })
   const started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>()

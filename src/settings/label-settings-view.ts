@@ -8,6 +8,7 @@ export function createLabelSettings(root: HTMLElement, dialog: HTMLDialogElement
   const control = <T extends HTMLElement>(id: string) => dialog.querySelector<T>(`#${id}`)!
   const events = new AbortController(), signal = events.signal
   const list = element<HTMLElement>('labels-list'), error = element<HTMLElement>('labels-error')
+  const localControls = element('local-label-controls'), unavailable = element('labels-unavailable')
   const retry = element<HTMLButtonElement>('labels-retry'), add = element<HTMLButtonElement>('label-add')
   const name = element<HTMLInputElement>('label-name'), color = element<HTMLButtonElement>('label-color')
   const reset = element<HTMLButtonElement>('labels-reset')
@@ -59,8 +60,8 @@ export function createLabelSettings(root: HTMLElement, dialog: HTMLDialogElement
         if (signal.aborted) return
         title.textContent = label ? `Delete “${label.name}”?` : 'Reset all labels?'
         description.textContent = label
-          ? `This removes the label from ${count} ${count === 1 ? 'note' : 'notes'} across all projects and worktrees in this store. Note text is unchanged.`
-          : `This removes labels from ${count} ${count === 1 ? 'note' : 'notes'} across all projects and worktrees in this store, deletes the current catalog, and restores the default labels. Note text and order are unchanged.`
+          ? `This removes the label from ${count} ${count === 1 ? 'note' : 'notes'} in the local SideNote store. Note text is unchanged.`
+          : `This removes labels from ${count} ${count === 1 ? 'note' : 'notes'} in the local SideNote store and restores the default catalog. Note text and order are unchanged.`
         confirm.textContent = label ? 'Delete label' : 'Reset labels'; confirmError.hidden = true; ack.checked = false; confirm.disabled = true; cancel.disabled = false
         dialog.showModal(); dialog.focus({ preventScroll: true }); dialog.scrollTop = 0
       } catch (reason) { await finishOperation().catch(fail); fail(reason) }
@@ -150,9 +151,12 @@ export function createLabelSettings(root: HTMLElement, dialog: HTMLDialogElement
   }
   function render() {
     if (signal.aborted) return
+    if (!session.localStoreAvailable && !localControls.hidden && localControls.querySelector('[aria-expanded="true"]')) dropdown.close(false)
+    localControls.hidden = !session.localStoreAvailable
+    unavailable.hidden = session.localStoreAvailable
     const state = session.labels, enabled = state.ready && !state.busy
     error.textContent = localError || state.error; error.hidden = !error.textContent
-    retry.hidden = !state.error; retry.disabled = state.busy
+    retry.hidden = !state.error; retry.disabled = !session.localStoreAvailable || state.busy
     name.disabled = color.disabled = add.disabled = reset.disabled = !enabled
     const ids = new Set(state.labels.map(label => label.id))
     for (const [id, row] of rows) if (!ids.has(id)) { row.disposePalette(); row.element.remove(); rows.delete(id) }

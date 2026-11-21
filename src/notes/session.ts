@@ -33,6 +33,7 @@ export class NoteSession {
   private writes = Promise.resolve()
   private pendingTextSave: PendingSave | undefined
   private loading = false
+  private localSelected = false
   private checking = false
   private problem = ''
   private target: NoteTarget | null = null
@@ -52,9 +53,16 @@ export class NoteSession {
   private catalogError = ''
   private labelDeletion: { id: string | null; operation: NoteOperation; states: Map<string, NoteCollection | null>; labels: readonly NoteLabel[] } | null = null
 
-  get labels() { return { ready: this.catalogReady && !this.catalogBusy && !this.operation, labels: this.catalog, busy: this.catalogBusy, error: this.catalogError } }
+  get localStoreAvailable(): boolean { return this.localSelected }
+  get labels() { return { ready: this.localSelected && this.catalogReady && !this.catalogBusy && !this.operation,
+    labels: this.catalog, busy: this.catalogBusy, error: this.catalogError } }
+
+  private requireLocalStore(): void {
+    if (!this.localSelected) throw new Error('The current note store is unavailable. Switch to a local worktree.')
+  }
 
   async loadLabels(): Promise<void> {
+    this.requireLocalStore()
     if (this.catalogBusy) return
     if (this.operation) throw new Error('Another note operation is already open.')
     this.catalogBusy = true; this.changed()
@@ -226,6 +234,7 @@ export class NoteSession {
     ++this.focusRevision
     if (this.operation !== null) return
     this.checking = true
+    this.localSelected = false
     ++this.generation
     this.problem = ''
     this.unavailable = null
@@ -241,6 +250,7 @@ export class NoteSession {
 
   private async focus(focus: NoteFocus): Promise<void> {
     this.unavailable = focus && 'unavailable' in focus ? focus.unavailable : null
+    this.localSelected = this.unavailable === null
     const target = focus && 'path' in focus ? focus : null
     const generation = ++this.generation
     const epoch = this.loadEpoch
@@ -476,6 +486,7 @@ export class NoteSession {
 
   async acquireNoteOperation(): Promise<NoteOperation> {
     this.pendingTextSave = undefined
+    this.requireLocalStore()
     if (this.operation) throw new Error('Another note operation is already open.')
     if (this.catalogBusy) throw new Error('Wait for the label catalog operation to finish.')
     const operation = { pending: 0 }

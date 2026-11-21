@@ -25,7 +25,7 @@
       "caption": "Filter by label to focus on the notes needed for a review."
     }
   ],
-  "engines": { "orca": ">=1.4.248" },
+  "engines": { "orca": ">=1.4.267" },
   "execution": "trusted-worker",
   "pluginApi": 1,
   "main": "src/worker.mjs",

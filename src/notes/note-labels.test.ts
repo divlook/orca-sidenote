@@ -94,6 +94,7 @@ test('backup contains full ordered catalog and labeled recovery; restore imports
     { id: 'suffix', name: 'bug (2)', color: 'pink' }])
   const { session, values } = fixture({ [LABEL_KEY]: { version: 1, labels: destination } })
   const transfer = new NotesTransfer(session)
+  await session.follow(async () => null)
   await transfer.beginTransfer()
   const notes = [{ ...target, notes: [{ id: 'one', text: 'one', labelId: 'x' },
     { id: 'two', text: 'two', labelId: 'b' }, { id: 'three', text: '', labelId: 'd' }] }]

@@ -21,8 +21,11 @@ const locationLabel = element<HTMLElement>('location'), settingsRoot = element<H
 const locationHelp = element<HTMLElement>('location-help')
 const filterRoot = element<HTMLElement>('note-filter')
 const addButtons = [element<HTMLButtonElement>('add-note-top'), element<HTMLButtonElement>('add-note-bottom')]
+const deleteAll = element<HTMLButtonElement>('delete-notes-open')
+const dataUnavailable = element('data-unavailable')
 const events = new AbortController(), signal = events.signal
 let disposed = false, externalError = '', filterScope = ''
+let catalogLoadStarted = false
 const session = new NoteSession(orca.storage, sessionChanged)
 const filters = new NoteFilters(orca.storage, filterChanged)
 const preferences = new NotePreferences(orca.storage, preferencesChanged)
@@ -48,7 +51,7 @@ const cards = createNoteCards({
 })
 const filterView = bindNoteFilter(filterRoot, element('filtered-empty'), filters, () => cards.filterChoosing())
 const labelSettings = createLabelSettings(settingsRoot, element('label-confirm'), session, dropdown, report)
-const deletion = bindNoteDeletion(element('delete-notes'), element('delete-notes-open'), session, report)
+const deletion = bindNoteDeletion(element('delete-notes'), deleteAll, session, report)
 const transfer = bindNoteTransfer(element('note-transfer'), element('transfer-open'), new NotesTransfer(session), report)
 renderShortcutHelp(element('shortcuts-list'))
 const disposeHelp = bindDialog(element('shortcuts-help'), element('shortcuts-open'),
@@ -60,6 +63,10 @@ function report(error: unknown) {
 }
 function sessionChanged() {
   if (disposed) return
+  if (session.localStoreAvailable && !catalogLoadStarted) {
+    catalogLoadStarted = true
+    void session.loadLabels().catch(() => {})
+  }
   const scope = session.view.scopeKey
   if (scope !== filterScope) { filterScope = scope; void filters.follow(scope) }
   filterChanged()
@@ -80,13 +87,22 @@ function render(): void {
   cards.render(view, preference)
   filterView.render(catalog.labels, catalog.ready, view.ready, cards.displayed, view.notes.length)
   labelSettings.render()
+  const localStoreAvailable = session.localStoreAvailable
   const target = view.target, basename = target?.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || target?.path
-  locationLabel.textContent = view.loading || view.checking && !target ? 'Switching…' : view.problem ? 'Location unavailable'
+  locationLabel.textContent = view.loading || view.checking && !target ? 'Switching…'
+    : view.problem ? localStoreAvailable ? 'Notes unavailable' : 'Location unavailable'
     : view.unavailable === 'remote' ? 'Remote worktree not supported'
     : target ? `${target.project ?? basename} · ${target.worktree ?? basename}${target.hostId && target.hostId !== 'local' ? ` · ${target.hostId}` : ''}` : 'No active worktree'
   locationLabel.title = !view.loading && target ? `${target.hostId ?? 'local'}: ${target.path}` : ''
   locationHelp.hidden = view.unavailable !== 'remote'
-  problem.textContent = [preference.problem, view.problem, view.error, catalog.error, filters.view.error, cards.problem, externalError].filter(Boolean).join(' ')
+  const storeStatus = localStoreAvailable ? '' : view.checking ? 'Checking the note store…'
+    : view.unavailable === 'remote' ? 'SideNote cannot access a note store for this remote worktree.'
+    : 'The note store could not be confirmed.'
+  transfer.render(storeStatus)
+  deleteAll.disabled = !localStoreAvailable
+  dataUnavailable.hidden = localStoreAvailable
+  if (dataUnavailable.textContent !== storeStatus) dataUnavailable.textContent = storeStatus
+  problem.textContent = [preference.problem, view.problem, view.error, localStoreAvailable ? catalog.error : '', filters.view.error, cards.problem, externalError].filter(Boolean).join(' ')
   problem.hidden = !problem.textContent
   const writable = view.ready && preference.ready
   retry.hidden = !view.error; retry.disabled = !writable || view.pending > 0
@@ -114,7 +130,6 @@ render()
 settings.render()
 void preferences.initialize()
 void followFocus()
-void session.loadLabels().catch(() => {})
 void orca.plugin.request('notes.devStatus').then(value => {
   if (!disposed && value === true) element('dev-badge').hidden = false
 }).catch(() => {})

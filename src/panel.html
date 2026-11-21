@@ -89,6 +89,8 @@
     </form>
     <section class="labels-section" aria-labelledby="labels-title">
       <h3 id="labels-title">Labels</h3>
+      <p id="labels-unavailable" role="status" hidden>No note store is available for labels.</p>
+      <div id="local-label-controls">
       <p>Labels are shared across all projects and worktrees in this store. Edit a name or color, then select Save changes for that label. Other preferences save automatically.</p>
       <p id="labels-error" role="alert" hidden></p>
       <button id="labels-retry" type="button" hidden>Retry labels</button>
@@ -100,15 +102,17 @@
         <button id="label-add" type="button">Add label</button>
       </div>
       <button id="labels-reset" type="button">Reset labels…</button>
+      </div>
     </section>
     <section class="data-section" aria-labelledby="data-title">
       <h3 id="data-title">Data</h3>
-      <p>Back up or restore notes in this plugin store. Settings and undo history are not transferred.</p>
-      <button id="transfer-open" type="button" aria-haspopup="dialog" aria-controls="note-transfer">Back up or restore notes…</button>
+      <p>Back up or restore notes in the local SideNote store. Settings and undo history are not transferred.</p>
+      <p id="data-unavailable" role="status" hidden></p>
+      <button id="transfer-open" type="button" aria-haspopup="dialog" aria-controls="note-transfer" disabled>Back up or restore notes…</button>
     </section>
     <section class="delete-section" aria-label="Delete notes">
-      <p>Remove notes from every project and worktree in this plugin store. Settings are kept.</p>
-      <button id="delete-notes-open" type="button" aria-haspopup="dialog" aria-controls="delete-notes">Delete all notes…</button>
+      <p>Remove notes from every project and worktree in the local SideNote store. Settings are kept.</p>
+      <button id="delete-notes-open" type="button" aria-haspopup="dialog" aria-controls="delete-notes" disabled>Delete all notes…</button>
     </section>
     </div>
     <footer class="dialog-footer"><button id="settings-close-footer" type="button">Close</button></footer>
@@ -150,7 +154,8 @@
       <h2 id="transfer-title">Back up or restore notes</h2>
     </header>
     <div id="transfer-body" class="dialog-body" tabindex="0" role="region" aria-labelledby="transfer-title">
-      <p>Notes only, in this plugin store. Settings and undo history are not transferred. Host and path identities stay exact; paths are never file destinations.</p>
+      <p id="transfer-target" role="status">Target: Local SideNote store</p>
+      <p>Settings and undo history are not transferred. Host and path identities stay exact; paths are never file destinations.</p>
       <p>First save or copy unsaved content in all other Note panels using this store, then close them. Other panels cannot be detected or locked. This is not a cross-panel transaction.</p>
       <label><input id="transfer-alone" type="checkbox">I have safely saved or copied other panels’ unsaved content and closed those panels.</label>
       <button id="transfer-start" type="button" disabled>Start transfer</button>

@@ -25,6 +25,7 @@ export function bindNoteTransfer(dialog: HTMLDialogElement, open: HTMLButtonElem
   const commit = element<HTMLButtonElement>('transfer-commit')
   const stop = element<HTMLButtonElement>('transfer-stop')
   const summary = element<HTMLElement>('transfer-summary')
+  const target = element<HTMLElement>('transfer-target')
   const candidates = element<HTMLElement>('transfer-candidates')
   const mode = element<HTMLSelectElement>('transfer-mode')
   const restoreSection = element('transfer-restore')
@@ -40,6 +41,7 @@ export function bindNoteTransfer(dialog: HTMLDialogElement, open: HTMLButtonElem
   const copyControls = [copySource, copyPreview, copyConfirm, copyCommit]
   let busy = false
   let active = false
+  let unavailableReason = 'Checking the note store…'
   let pending = Promise.resolve()
   let backup: Uint8Array | null = null
   let protection: Uint8Array | null = null
@@ -53,6 +55,14 @@ export function bindNoteTransfer(dialog: HTMLDialogElement, open: HTMLButtonElem
   let noteChecks: HTMLInputElement[] = []
   const selectedIds = new Set<string>()
   const copying = () => mode.value === 'copy'
+  function syncStartControls() {
+    open.disabled = !!unavailableReason
+    if (busy || active) return
+    start.disabled = !!unavailableReason || !acknowledge.checked
+    acknowledge.disabled = !!unavailableReason
+    const text = unavailableReason || 'Target: Local SideNote store'
+    if (target.textContent !== text) target.textContent = text
+  }
   function syncCopyControls() {
     const ready = !busy && active && copying()
     copySource.disabled = !ready || !copyCandidates.length
@@ -122,8 +132,8 @@ export function bindNoteTransfer(dialog: HTMLDialogElement, open: HTMLButtonElem
         preview.disabled = !imported || !active || copying()
         protect.disabled = !protection || !plan
         commit.disabled = !plan
-        for (const control of [confirm, acknowledge, ...choiceControls]) control.disabled = false
-        start.disabled = !acknowledge.checked || active
+        for (const control of [confirm, ...choiceControls]) control.disabled = false
+        syncStartControls()
         syncCopyControls()
       }
       complete()
@@ -132,10 +142,11 @@ export function bindNoteTransfer(dialog: HTMLDialogElement, open: HTMLButtonElem
   const disposeDialog = bindDialog(dialog, open, close, { canClose: () => !busy, opened() {
     acknowledge.checked = false; start.disabled = true
     summary.textContent = 'Save or copy unsaved content from every other Note panel using this plugin store, then close those panels.'
+    syncStartControls()
   } })
-  acknowledge.addEventListener('change', () => { start.disabled = !acknowledge.checked || active }, { signal })
+  acknowledge.addEventListener('change', syncStartControls, { signal })
   start.addEventListener('click', () => { void run(async () => {
-    if (!acknowledge.checked) return
+    if (unavailableReason || !acknowledge.checked) return
     await transfer.beginTransfer(); active = true
     if (signal.aborted) return
     start.disabled = true
@@ -307,9 +318,12 @@ export function bindNoteTransfer(dialog: HTMLDialogElement, open: HTMLButtonElem
   dialog.addEventListener('close', () => {
     if (active) void transfer.finishTransfer().catch(reportError)
     active = false; backup = imported = null; invalidate(); choices = []; choiceControls = []
-    resetView()
+    resetView(); syncStartControls()
   }, { signal })
-  return { async dispose() {
+  return { render(status: string) {
+    unavailableReason = status
+    syncStartControls()
+  }, async dispose() {
     events.abort(); disposeDialog()
     resetView()
     if (dialog.open) dialog.close()

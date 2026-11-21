@@ -18,7 +18,7 @@ Minimized cards show a single-line plain-text summary of the first nonempty top-
 
 Use reading mode to read formatted Markdown and toggle task checkboxes with a click or Space. Single line breaks in paragraphs and list items remain visible; blank lines still separate blocks. Changes save normally and can be undone in that note's editor. Raw HTML checkboxes stay read-only. Images do not load. Long cards keep their toolbar visible while you scroll.
 
-In reading mode, open HTTP and HTTPS links in your default browser, a new Orca browser tab, or a destination chosen each time. In note settings, **Open web links in** offers **Default browser** (the default), **Orca browser**, and **Ask every time**. `mailto:` links open externally. For a local worktree, relative file links resolve from its root; absolute paths and `file://` links within it open in Orca's editor. Remote worktrees can open web links through the same configured destinations. Remote file links are unsupported and show an error. Links outside the worktree, unsupported protocols, and links from an ambiguous, stale, or wrong-host scope are rejected with an error.
+In reading mode, open HTTP and HTTPS links in your default browser, a new Orca browser tab, or a destination chosen each time. In note settings, **Open web links in** offers **Default browser** (the default), **Orca browser**, and **Ask every time**. `mailto:` links open externally. Relative file links resolve from the local worktree root; absolute paths and `file://` links within it open in Orca's editor. SideNote rejects links outside the worktree, unsupported protocols, and links from an ambiguous, stale, or wrong-host scope.
 
 Before opening a local file, SideNote resolves its canonical path and checks that it is inside the worktree. Orca's editor API does not guard against a concurrent filesystem change between that check and opening the file.
 
@@ -26,7 +26,7 @@ Opening files requires the `workspace:write` permission. Review and approve the 
 
 The subtitle shows the current project and worktree. During **Switching…**, editing stays disabled until the new collection is ready. An ambiguous or unavailable location blocks editing. A confirmed development installation shows a **DEV** badge.
 
-If the focused worktree is on a remote server and unavailable in the local worktree list, the subtitle shows **Remote worktree not supported**. The panel keeps note editing disabled and displays **Switch to a local worktree to use SideNote.** A genuinely empty focus still shows **No active worktree**; an unidentifiable focus shows **Location unavailable** instead of guessing that it is remote.
+If SideNote confirms a remote worktree is focused, the subtitle shows **Remote worktree not supported**. Switch to a local worktree to use SideNote. **No active worktree** means SideNote confirmed that nothing is focused; **Location unavailable** means SideNote could not confirm the location. You cannot start label changes, note transfers, or bulk deletion until SideNote confirms the local store.
 
 ## Code blocks
 

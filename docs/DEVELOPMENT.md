@@ -2,7 +2,9 @@
 
 ## Prerequisites and setup
 
-This setup targets a local macOS development folder. Install Git, Orca, Node.js 22 or later, and npm. Start Orca. The [manifest](../orca-plugin.json) states the Orca compatibility requirement.
+This setup targets a local macOS development folder. Install Git, Orca 1.4.267 or later, Node.js 22 or later, and npm. Start Orca. The [manifest](../orca-plugin.json) states the Orca compatibility requirement.
+
+Orca 1.4.248's [focus resolver](https://github.com/stablyai/orca/blob/v1.4.248/src/main/runtime/terminal/wait/terminal-interactive-wait.ts) can fall back to a local renderer tab and resolves worktrees without the selected host. That answer cannot safely identify the note store. The guard is based on the host-aware focus resolver in Orca 1.4.267; older versions have not been verified with an equivalent focus check.
 
 The worker requires `/Applications/Orca.app/Contents/Resources/bin/orca`, even if another `orca` executable exists. The commands below use that path.
 

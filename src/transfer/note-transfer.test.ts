@@ -79,10 +79,46 @@ test('capture drains saves, gates edits, and retains failed full collections inc
   await transfer.finishTransfer()
 })
 
+test('local transfer is pinned at start and independent of confirmed local editor readiness', async () => {
+  const key = noteKey(second)
+  const { session, notesTransfer: transfer } = fixture([[key, 'local original']])
+  await session.follow(async () => null)
+  assert.equal(session.view.ready, false)
+  await transfer.beginTransfer()
+  await session.follow(async () => ({ unavailable: 'remote' }))
+  const backup = await transfer.captureBackup()
+  assert.deepEqual(backup.notes, [{ ...second, notes: [{ id: 'legacy', text: 'local original' }] }])
+  await assert.rejects(() => transfer.previewCopy(backup, { key, source: 'notes', noteIds: ['legacy'] }),
+    /No workspace could be confirmed/)
+  await transfer.finishTransfer()
+  assert.equal(session.view.unavailable, 'remote')
+  await assert.rejects(() => transfer.beginTransfer(), /store is unavailable/)
+})
+
+test('a confirmed local store remains the transfer target when its editor load fails', async () => {
+  const key = noteKey(second), { store } = fixture([[key, 'local original']])
+  let fail = true
+  const session = new NoteSession({
+    ...store,
+    get: async key => {
+      if (fail) { fail = false; throw new Error('unreadable during editor load') }
+      return store.get(key)
+    }
+  }, () => {})
+  const transfer = new NotesTransfer(session)
+  await session.follow(async () => second)
+  assert.equal(session.view.ready, false)
+  assert.match(session.view.problem, /unreadable during editor load/)
+  await transfer.beginTransfer()
+  assert.equal((await transfer.captureBackup()).notes[0].notes[0].text, 'local original')
+  await transfer.finishTransfer()
+})
+
 test('scope conflicts protect complete originals and cancellation blocks replacement without touching settings', async () => {
   const key = noteKey(first)
   const { session, notesTransfer: transfer, values, writes } = fixture([[key, 'original'],
     [noteKey(second), 'unrelated'], ['settings:v1', 'keep']])
+  await session.follow(async () => null)
   await transfer.beginTransfer()
   const value = archive([first], [])
   let plan = await transfer.previewRestore(value, [{ key, source: 'notes', replace: false }])
@@ -103,7 +139,8 @@ test('scope conflicts protect complete originals and cancellation blocks replace
 
 test('corrupt, null, changed or oversized destinations fail without writes', async () => {
   const key = noteKey(first), choices = [{ key, source: 'notes' as const, replace: true }]
-  const { notesTransfer: transfer, values, writes } = fixture([[key, { corrupt: true }]])
+  const { session, notesTransfer: transfer, values, writes } = fixture([[key, { corrupt: true }]])
+  await session.follow(async () => null)
   await transfer.beginTransfer()
   await assert.rejects(() => transfer.captureBackup())
   await assert.rejects(() => transfer.previewRestore(archive([first], []), choices))
@@ -128,6 +165,7 @@ test('middle failure returns applied, unknown and unattempted scopes; retry skip
     await store.set(key, value)
   } }, () => {})
   const transfer = new NotesTransfer(session)
+  await session.follow(async () => null)
   await transfer.beginTransfer()
   const choices = notes.map(note => ({ key: noteKey(note), source: 'notes' as const, replace: false }))
   let plan = await transfer.previewRestore(archive(notes, []), choices)
@@ -203,21 +241,24 @@ test('dirty replacement protects empty clears and stop leaves subsequent collect
 test('quota preflight counts envelopes, serialized escapes, settings, keys and exact long identities', async () => {
   const key = noteKey(first), choices = [{ key, source: 'notes' as const, replace: false }]
   for (const text of ['"'.repeat(131072), '\u0000'.repeat(43691)]) {
-    const { notesTransfer: transfer, writes } = fixture()
+    const { session, notesTransfer: transfer, writes } = fixture()
+    await session.follow(async () => null)
     await transfer.beginTransfer()
     await assert.rejects(() => transfer.previewRestore(archive([{ ...first, notes: [{ id: 'a', text }] }], []), choices))
     assert.equal(writes.length, 0); await transfer.finishTransfer()
   }
   for (const initial of [Array.from({ length: 1024 }, (_, i): [string, unknown] => [`setting:${i}`, null]),
     [['settings', 'x'.repeat(5242800)]] as [string, unknown][]]) {
-    const { notesTransfer: transfer, writes } = fixture(initial)
+    const { session, notesTransfer: transfer, writes } = fixture(initial)
+    await session.follow(async () => null)
     await transfer.beginTransfer()
     await assert.rejects(() => transfer.previewRestore(archive([first], []), choices))
     assert.equal(writes.length, 0); await transfer.finishTransfer()
   }
   const long = { ...first, path: '/'.repeat(40000) }
   assert.equal(decodeArchive(encodeArchive(archive([long], []))).notes[0].path, long.path)
-  const { notesTransfer: transfer } = fixture()
+  const { session, notesTransfer: transfer } = fixture()
+  await session.follow(async () => null)
   await transfer.beginTransfer()
   await assert.rejects(() => transfer.previewRestore(archive([long], []),
     [{ key: noteKey(long), source: 'notes', replace: false }]))

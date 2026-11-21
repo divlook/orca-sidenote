@@ -9,6 +9,7 @@ import { noteKey } from '../protocol'
 import { localNoteFile, openNoteLink } from './note-link-routing'
 import { NotePreferences } from '../settings/note-preferences'
 import { WEB_LINK_OPENING_KEY } from '../settings/note-settings'
+import type { ConfirmedFocus } from './focus'
 
 test('note link parser confines protocols and decodes file paths exactly once', () => {
   assert.deepEqual(parseNoteLink('file:///root/a%20b.md'), { kind: 'file', path: '/root/a b.md' })
@@ -35,75 +36,63 @@ test('local files return editor-relative canonical paths and reject symlink esca
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 
-function fixture(hostId: string | null = null, path = '/synthetic/root') {
-  const target = { hostId, path }
-  const row = { ...target, isActive: true, address: { environment: hostId ? 'paired-authoritative' : 'local', worktree: 'identity:exact' } }
-  const snapshot = { ok: true, result: { truncated: false, worktrees: [row] } }
-  const commands: string[][] = [], calls: string[] = []
-  let current = true
+function fixture(path = '/synthetic/root') {
+  const target = { hostId: 'local', path }
+  const route = { kind: 'local', target, workspaceId: 'identity:wt2:local:exact', worktree: 'identity:wt2:local:exact' } as const
+  const commands: string[][] = [], calls: { workspaceId: string; path: string }[] = []
+  const state: { focus: ConfirmedFocus; current: boolean } = { focus: route, current: true }
   const dependencies = {
-    snapshot: async () => snapshot,
-    host: async (method: string) => { calls.push(method); return { truncated: false, workspaces: [{ ...target, id: 'workspace-exact' }] } },
+    focus: async () => state.focus,
+    openFile: async (workspaceId: string, path: string) => { calls.push({ workspaceId, path }); return { opened: true } },
     command: async (args: string[]) => { commands.push(args); return null },
-    current: () => current
+    current: async () => state.current
   }
-  return { target, row, snapshot, commands, calls, dependencies, stale: () => { current = false }, input: { scope: noteKey(target), href: 'https://example.com/' } }
+  return { state, route, commands, calls, dependencies, input: { scope: noteKey(target), href: 'https://example.com/' } }
 }
-test('internal web routing copies authoritative remote address and always creates a tab', async () => {
-  const f = fixture('ssh:opaque-host')
+
+test('Orca web links use the verified local address and create a new tab', async () => {
+  const f = fixture()
   await openNoteLink(f.input, f.dependencies)
-  assert.deepEqual(f.commands, [['tab', 'create', '--url', 'https://example.com/', '--worktree', 'identity:exact', '--environment', 'paired-authoritative', '--json']])
+  assert.deepEqual(f.commands, [['tab', 'create', '--url', 'https://example.com/', '--worktree', f.route.worktree, '--environment', 'local', '--json']])
   assert.deepEqual(f.calls, [])
 })
-test('routing rejects truncated ambiguous stale missing-address and cross-host snapshots', async () => {
-  for (const scenario of ['truncated', 'ambiguous', 'stale', 'address', 'host']) {
+
+test('routing rejects no focus, changed host, stale focus and unavailable addresses', async () => {
+  for (const scenario of ['idle', 'host', 'stale', 'address']) {
     const f = fixture()
-    if (scenario === 'truncated') f.snapshot.result.truncated = true
-    if (scenario === 'ambiguous') f.snapshot.result.worktrees.push({ ...f.row })
-    if (scenario === 'stale') f.stale()
-    if (scenario === 'address') f.row.address.environment = ''
-    if (scenario === 'host') f.row.hostId = 'other-host'
+    if (scenario === 'idle') f.state.focus = null
+    if (scenario === 'host') f.state.focus = { ...f.route, target: { ...f.route.target, hostId: null } }
+    if (scenario === 'stale') f.state.current = false
+    if (scenario === 'address') f.state.focus = { ...f.route, worktree: undefined }
     await assert.rejects(openNoteLink(f.input, f.dependencies))
-    assert.equal(f.commands.length, 0)
+    assert.deepEqual(f.commands, [])
   }
 })
-test('remote file links are unsupported without workspace lookup or opening a destination', async () => {
-  for (const [hostId, environment] of [
-    ['ssh:opaque-host', 'paired-authoritative'],
-    ['ssh:opaque-host', 'local'],
-    [null, 'paired-authoritative'],
-  ] as const) {
-    const f = fixture(hostId)
-    f.row.address.environment = environment
-    for (const href of ['a.md', '/synthetic/root/a.md', 'file:///synthetic/root/a.md']) {
-      await assert.rejects(openNoteLink({ ...f.input, href }, f.dependencies), Error)
-    }
-    assert.deepEqual(f.calls, []); assert.deepEqual(f.commands, [])
-  }
-})
-test('scope change during asynchronous workspace lookup rejects editor opening', async () => {
+
+test('remote focus cannot open a file or reroute a local web link', async () => {
   const f = fixture()
-  f.dependencies.host = async () => { f.stale(); return { truncated: false, workspaces: [{ ...f.target, id: 'workspace-exact' }] } }
-  await assert.rejects(openNoteLink({ ...f.input, href: 'a.md' }, f.dependencies))
-  assert.deepEqual(f.commands, [])
+  f.state.focus = { kind: 'remote' }
+  for (const href of ['a.md', '/synthetic/root/a.md', 'file:///synthetic/root/a.md']) {
+    await assert.rejects(openNoteLink({ ...f.input, href }, f.dependencies), /Remote file links are not supported/)
+  }
+  await assert.rejects(openNoteLink(f.input, f.dependencies), /worktree changed/)
+  assert.deepEqual(f.calls, []); assert.deepEqual(f.commands, [])
 })
-test('local editor routing sends a relative path and rejects incomplete or ambiguous host lists', async () => {
+
+test('local editor uses the confirmed workspace ID and relative path, and rechecks after path lookup', async () => {
   const root = await mkdtemp(join(tmpdir(), 'sidenote-route-'))
   try {
     await writeFile(join(root, 'a.md'), 'synthetic')
-    const f = fixture(null, root)
-    const calls: { method: string; params: unknown }[] = []
-    const dependencies = { ...f.dependencies, host: async (method: string, params?: unknown) => {
-      calls.push({ method, params })
-      return method === 'workspace.list' ? { truncated: false, workspaces: [{ ...f.target, id: 'exact' }] } : { opened: true }
-    } }
-    await openNoteLink({ ...f.input, href: 'a.md' }, dependencies)
-    assert.deepEqual(calls.at(-1), { method: 'editor.open', params: { workspaceId: 'exact', path: 'a.md' } })
-    for (const listed of [{ truncated: true, workspaces: [] }, { truncated: false, workspaces: [{ ...f.target, id: 'a' }, { ...f.target, id: 'b' }] }]) {
-      await assert.rejects(openNoteLink({ ...f.input, href: 'a.md' }, { ...dependencies, host: async () => listed }))
-    }
+    const f = fixture(root)
+    const input = { ...f.input, href: 'a.md' }
+    await openNoteLink(input, f.dependencies)
+    assert.deepEqual(f.calls, [{ workspaceId: f.route.workspaceId, path: 'a.md' }])
+    f.state.current = false
+    await assert.rejects(openNoteLink(input, f.dependencies), /worktree changed/)
+    assert.equal(f.calls.length, 1)
   } finally { await rm(root, { recursive: true, force: true }) }
 })
+
 test('web preference defaults independently, rolls back, retries and preserves note data', async () => {
   const values = new Map<string, unknown>([['note:v1:synthetic', 'untouched']])
   let fail = false

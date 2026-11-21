@@ -12,7 +12,7 @@ Labels can be used to filter displayed cards. Automatic note sorting, hiding com
 
 ## Shared catalog and defaults
 
-One ordered label catalog is shared by all projects, worktrees, and hosts in the current plugin store. Separate Orca servers retain separate stores; sharing the catalog does not add synchronization between them.
+One ordered label catalog is shared by all projects and worktrees in the local SideNote store. Label management is unavailable while SideNote checks focus or when it cannot confirm a local worktree or the absence of focus. Unsaved label changes in the panel are kept until you return to the local store.
 
 The default catalog has this order:
 

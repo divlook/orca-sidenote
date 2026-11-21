@@ -1,22 +1,23 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { focusedTarget, missingFocus } from './worktree/focus.ts'
+import { resolveFocus } from './worktree/focus.ts'
 import { openNoteLink } from './worktree/note-link-routing.ts'
 
-// Use this installation's CLI: the plugin context API omits the focused workspace ID.
+// The installed CLI supplies complete workspace rows and their exact Orca addresses.
 const cli = '/Applications/Orca.app/Contents/Resources/bin/orca'
-const worktreeArgs = ['worktree', 'ps', '--environment', 'local', '--limit', '10000', '--json']
-function execute(args) {
+function command(args) {
   return new Promise((resolve, reject) => {
-    execFile(cli, args, { encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 },
-      (error, stdout) => error ? reject(new Error(stdout || error.message)) : resolve(stdout))
+    const fail = () => reject(new Error('Orca could not complete the request.'))
+    execFile(cli, args, { encoding: 'utf8', timeout: 15000, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+      if (error) return fail()
+      try {
+        const response = JSON.parse(stdout)
+        if (response?.ok === true) resolve(response)
+        else fail()
+      } catch { fail() }
+    })
   })
-}
-async function command(args) {
-  const response = JSON.parse(await execute(args))
-  if (response.ok !== true) throw new Error('Orca could not open the note link.')
-  return response
 }
 function isOwnDevResponse(output, token) {
   try {
@@ -34,13 +35,33 @@ export default function activate(orca) {
   let devStatus
   let focusGeneration = 0
   orca.events.on('workspace.changed', () => { ++focusGeneration })
-  orca.panels.handle('notes.openLink', input => {
+  const context = () => orca.host.call('workspace.readContext')
+  const captureFocus = () => {
     const generation = focusGeneration
-    return openNoteLink(input, {
-      snapshot: () => command(worktreeArgs),
-      host: (method, params) => orca.host.call(method, params),
-      command, current: () => generation === focusGeneration
-    }).then(() => null)
+    const current = () => generation === focusGeneration
+    return {
+      read: () => resolveFocus({
+        context, current,
+        environmentList: () => command(['environment', 'list', '--json']),
+        snapshot: environment => command(['worktree', 'ps', '--environment', environment, '--limit', '10000', '--json'])
+      }),
+      current: async workspaceId => {
+        try {
+          return current() && (await context())?.workspaceId === workspaceId && current()
+        } catch {
+          return false
+        }
+      }
+    }
+  }
+  orca.panels.handle('notes.openLink', async input => {
+    if (typeof input?.scope !== 'string' || typeof input.href !== 'string') throw new Error('This note link is invalid.')
+    const focus = captureFocus()
+    await openNoteLink(input, {
+      focus: focus.read, current: focus.current, command,
+      openFile: (workspaceId, path) => orca.host.call('editor.open', { workspaceId, path })
+    })
+    return null
   })
   orca.panels.handle('notes.devProbe', () => token)
   orca.panels.handle('notes.devStatus', () => {
@@ -52,19 +73,8 @@ export default function activate(orca) {
     return devStatus
   })
   orca.panels.handle('notes.focused', async () => {
-    const generation = focusGeneration
-    const local = JSON.parse(await execute(worktreeArgs))
-    const target = focusedTarget(local)
-    if (target) return target
-    const context = await orca.host.call('workspace.readContext')
-    const selectors = local.result.hostScope?.omittedHostSelectors ?? []
-    const remotes = context === null ? [] : await Promise.all(selectors.map(async row => {
-      if (typeof row.selector !== 'string' || !row.selector.startsWith('--environment ') || !row.selector.slice(14)) {
-        throw new Error('The remote worktree list cannot be read.')
-      }
-      return JSON.parse(await execute(['worktree', 'ps', '--environment', row.selector.slice(14), '--limit', '10000', '--json']))
-    }))
-    if (generation !== focusGeneration) throw new Error('The active worktree changed. Wait for the current location.')
-    return missingFocus(context, local, remotes)
+    const focus = await captureFocus().read()
+    if (focus === null) return null
+    return focus.kind === 'local' ? focus.target : { unavailable: 'remote' }
   })
 }

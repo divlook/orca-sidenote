@@ -34,7 +34,7 @@ export function bindNoteDeletion(dialog: HTMLDialogElement, open: HTMLButtonElem
       try {
         const count = await session.prepareDeletion()
         if (signal.aborted) return
-        description.textContent = `${count} notes or empty saved locations across all projects and worktrees will be permanently deleted from this plugin store.`
+        description.textContent = `${count} notes or empty saved locations across all projects and worktrees will be permanently deleted from the local SideNote store.`
         confirm.disabled = count === 0
       } finally { if (!signal.aborted) { cancel.disabled = false; cancel.focus() } }
     })

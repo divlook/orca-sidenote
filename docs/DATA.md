@@ -1,6 +1,6 @@
 # Notes and data
 
-Each exact host and worktree path has an ordered collection of notes in Orca's plugin-owned storage, separate from project files and Git. There is no automatic remote backup or synchronization. Separate Orca servers have separate stores.
+Each exact host and worktree path has an ordered collection of notes in Orca's plugin-owned storage, separate from project files and Git. SideNote does not open notes on paired remote worktrees or sync notes between servers.
 
 Removing a project or worktree does not delete its note collection. Reusing the same host and path reads the collection again. Folder moves and host changes have no automatic migration. Retention after plugin removal or app-data reset is not guaranteed.
 
@@ -24,11 +24,13 @@ Backup files contain note text and potentially sensitive host and folder paths i
 
 Other Note panels cannot be detected or locked. Before a transfer, save or copy their unsaved content and close them.
 
-1. Open **Note Settings → Data → Back up or restore notes…**.
-2. Check the acknowledgement. Select **Start transfer**. Editing pauses in this panel until you close the dialog.
+1. Open **Note Settings → Data → Back up or restore notes…**. Check that **Target: Local SideNote store** appears.
+2. Check the acknowledgement. Select **Start transfer**. Editing pauses in this panel until you close the dialog. Backup and restore stay on the local store even if focus changes; copying requires a confirmed local destination.
 3. Select **Prepare backup**. Select **Save backup file**.
 
-The backup includes the complete ordered label catalog, all stored collections with note IDs, label assignments and order, and separate recovery collections from this panel. Recovery collections include failed edits, new blank notes, empty clears, and unsaved ordering changes. The backup excludes settings, label filters, undo history, and unsaved drafts held only in other panels. Backup is available even when the active location, editor, or settings are not ready.
+The backup includes the complete ordered label catalog, all stored collections with note IDs, label assignments and order, and separate recovery collections from this panel. Recovery collections include failed edits, new blank notes, empty clears, and unsaved ordering changes. The backup excludes settings, label filters, undo history, and unsaved drafts held only in other panels.
+
+You can start a local transfer when SideNote confirms a local worktree or confirms that no worktree is focused, even if the editor is not ready. Orca can report the same result for no focus and unresolved remote focus on a paired setup. If SideNote cannot confirm the store, focus a local worktree.
 
 ## Restore notes
 
@@ -62,7 +64,7 @@ Copy merges only labels needed by selected notes, following the same matching an
 
 ## Delete all notes
 
-Deletion cannot be undone. Copy important notes elsewhere before confirming. Close other Note panels first to avoid concurrent edits. Other Orca servers have separate stores.
+Deletion cannot be undone. Copy important notes elsewhere before confirming. Close other Note panels first to avoid concurrent edits. You can start bulk deletion only when SideNote confirms the local store.
 
 Under **Note Settings**, select **Delete all notes…**. The count covers notes or empty saved locations across all projects, worktrees, and hosts in this store, including removed targets and this panel's drafts. Each empty or unreadable saved location counts as one cleanup entry. Pending writes finish before counting. Editing and focus loads remain suspended through confirmation.
 

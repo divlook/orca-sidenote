@@ -1,6 +1,6 @@
 # SideNote for Orca
 
-Keep Markdown notes beside each Orca project or worktree. SideNote follows the focused location and saves edits automatically.
+Keep Markdown notes beside each local Orca project or worktree. SideNote follows the focused location and saves edits automatically. Paired remote worktrees are not supported.
 
 ![SideNote with labeled reading-mode notes, a minimized card, and the label filter](docs/images/cover.png)
 

@@ -1,8 +1,8 @@
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import { noteKey, parseNoteKey } from '../protocol'
-import { parseNoteLink } from '../markdown/note-links'
-import { focusedTarget } from './focus'
+import { noteKey } from '../protocol.ts'
+import { parseNoteLink } from '../markdown/note-links.ts'
+import type { ConfirmedFocus } from './focus.ts'
 
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Orca returned invalid link routing information.')
@@ -22,39 +22,34 @@ export async function localNoteFile(root: string, destination: string): Promise<
 }
 
 type RouteDependencies = {
-  snapshot(): Promise<unknown>
-  host(method: string, params?: unknown): Promise<unknown>
+  focus(): Promise<ConfirmedFocus>
+  openFile(workspaceId: string, path: string): Promise<unknown>
   command(args: string[]): Promise<unknown>
-  current(): boolean
+  current(workspaceId: string): Promise<boolean>
 }
 export async function openNoteLink(input: { scope: string; href: string }, dependencies: RouteDependencies): Promise<void> {
-  const target = parseNoteKey(input.scope), link = parseNoteLink(input.href)
+  const link = parseNoteLink(input.href)
   if (link.kind === 'mail') throw new Error('Email links must open from the panel.')
-  const snapshot = object(await dependencies.snapshot())
-  const active = focusedTarget(snapshot)
-  const assertCurrent = () => {
-    if (!dependencies.current() || !active || noteKey(active) !== input.scope) throw new Error('The note’s worktree changed. Open the link again.')
+  const active = await dependencies.focus()
+  if (active?.kind === 'remote' && link.kind === 'file') {
+    throw new Error('Remote file links are not supported. File links can only open from local worktrees.')
   }
-  assertCurrent()
-  const result = object(snapshot.result)
-  if (!Array.isArray(result.worktrees)) throw new Error('The complete worktree list is unavailable.')
-  const matches = result.worktrees.map(object).filter(row => row.path === target.path && row.hostId === target.hostId)
-  if (matches.length !== 1) throw new Error('The note’s worktree cannot be identified uniquely.')
-  const address = object(matches[0].address)
-  if (typeof address.environment !== 'string' || !address.environment || typeof address.worktree !== 'string' || !address.worktree) throw new Error('The note’s worktree has no verified Orca route.')
+  if (active?.kind !== 'local' || noteKey(active.target) !== input.scope) {
+    throw new Error('The note’s worktree changed. Open the link again.')
+  }
+  const assertCurrent = async () => {
+    if (!await dependencies.current(active.workspaceId)) {
+      throw new Error('The note’s worktree changed. Open the link again.')
+    }
+  }
   if (link.kind === 'web') {
-    assertCurrent()
-    await dependencies.command(['tab', 'create', '--url', link.href, '--worktree', address.worktree, '--environment', address.environment, '--json'])
+    if (!active.worktree) throw new Error('The note’s worktree has no verified Orca route.')
+    await assertCurrent()
+    await dependencies.command(['tab', 'create', '--url', link.href, '--worktree', active.worktree, '--environment', 'local', '--json'])
     return
   }
-  if (address.environment !== 'local' || target.hostId !== null && target.hostId !== 'local') throw new Error('Remote file links are not supported. File links can only open from local worktrees.')
-  const listed = object(await dependencies.host('workspace.list'))
-  if (listed.truncated !== false || !Array.isArray(listed.workspaces)) throw new Error('The complete Orca workspace list is unavailable.')
-  const workspaces = listed.workspaces.map(object).filter(row => row.path === target.path && row.hostId === target.hostId)
-  if (workspaces.length !== 1 || typeof workspaces[0].id !== 'string' || !workspaces[0].id) throw new Error('The note’s editor workspace cannot be identified uniquely.')
-  assertCurrent()
-  const path = await localNoteFile(target.path, link.path)
-  assertCurrent()
-  const opened = object(await dependencies.host('editor.open', { workspaceId: workspaces[0].id, path }))
+  const path = await localNoteFile(active.target.path, link.path)
+  await assertCurrent()
+  const opened = object(await dependencies.openFile(active.workspaceId, path))
   if (opened.opened !== true) throw new Error('Orca did not open the file.')
 }
