@@ -120,3 +120,74 @@ test('focus rejects missing IDs, partial lists, duplicated matches, transport er
     ...sources, context: async () => ({ workspaceId: reads++ === 0 ? remote.worktreeId : local.worktreeId })
   }), error)
 })
+
+test('following focus rechecks the latest ID even when the first list no longer contains the old worktree', async () => {
+  const workspaceId = `identity:${local.identity.key}`
+  let activeId = 'previous-worktree'
+  const capture = () => ({
+    context: async () => ({ workspaceId: activeId }),
+    environmentList: async () => environments(),
+    snapshot: async () => {
+      activeId = workspaceId
+      return snapshot([local])
+    },
+    current: () => true
+  })
+  assert.equal((await resolveFocus(capture(), capture))?.kind, 'local')
+})
+
+test('following focus discards a valid result when a workspace event invalidates its generation', async () => {
+  const workspaceId = `identity:${local.identity.key}`
+  const latest = { ...local, path: '/projects/app-moved' }
+  let generation = 0
+  const capture = () => {
+    const captured = generation
+    return {
+      context: async () => ({ workspaceId }),
+      environmentList,
+      snapshot: async () => {
+        if (captured !== 0) return snapshot([latest])
+        generation++
+        return snapshot([local])
+      },
+      current: () => captured === generation
+    }
+  }
+  const result = await resolveFocus(capture(), capture)
+  assert.equal(result?.kind === 'local' && result.target.path, latest.path)
+})
+
+test('following focus does not retry a stable incomplete list or keep retrying a moving focus', async () => {
+  const workspaceId = `identity:${local.identity.key}`
+  const error = { message: 'The active worktree could not be verified.' }
+  let attempts = 0
+  const sources = {
+    context: async () => ({ workspaceId }),
+    environmentList,
+    snapshot: async () => {
+      attempts++
+      return snapshot([local])
+    },
+    current: () => true
+  }
+  const incomplete = snapshot([local])
+  await assert.rejects(resolveFocus({
+    ...sources, snapshot: async () => ({ ...incomplete, result: { ...incomplete.result, truncated: true } })
+  }, () => sources), error)
+  assert.equal(attempts, 0)
+
+  let generation = 0
+  const capture = () => {
+    const captured = generation
+    return {
+      ...sources,
+      snapshot: async () => {
+        generation++
+        return sources.snapshot()
+      },
+      current: () => captured === generation
+    }
+  }
+  await assert.rejects(resolveFocus(capture(), capture), error)
+  assert.equal(attempts, 2)
+})

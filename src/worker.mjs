@@ -40,12 +40,10 @@ export default function activate(orca) {
     const generation = focusGeneration
     const current = () => generation === focusGeneration
     return {
-      read: () => resolveFocus({
-        context, current,
-        environmentList: () => command(['environment', 'list', '--json']),
-        snapshot: environment => command(['worktree', 'ps', '--environment', environment, '--limit', '10000', '--json'])
-      }),
-      current: async workspaceId => {
+      context, current,
+      environmentList: () => command(['environment', 'list', '--json']),
+      snapshot: environment => command(['worktree', 'ps', '--environment', environment, '--limit', '10000', '--json']),
+      currentWorkspace: async workspaceId => {
         try {
           return current() && (await context())?.workspaceId === workspaceId && current()
         } catch {
@@ -58,7 +56,7 @@ export default function activate(orca) {
     if (typeof input?.scope !== 'string' || typeof input.href !== 'string') throw new Error('This note link is invalid.')
     const focus = captureFocus()
     await openNoteLink(input, {
-      focus: focus.read, current: focus.current, command,
+      focus: () => resolveFocus(focus), current: focus.currentWorkspace, command,
       openFile: (workspaceId, path) => orca.host.call('editor.open', { workspaceId, path })
     })
     return null
@@ -73,7 +71,7 @@ export default function activate(orca) {
     return devStatus
   })
   orca.panels.handle('notes.focused', async () => {
-    const focus = await captureFocus().read()
+    const focus = await resolveFocus(captureFocus(), captureFocus)
     if (focus === null) return null
     return focus.kind === 'local' ? focus.target : { unavailable: 'remote' }
   })

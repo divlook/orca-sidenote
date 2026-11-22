@@ -19,6 +19,8 @@ Text-save coalescing replaces only the contiguous waiting tail for the same scop
 
 The worker confirms `workspace.readContext` against complete CLI worktree snapshots before selecting a local note scope. A local active marker is not proof of focus. An exact host-qualified local Git ID can be confirmed without querying paired servers; IDs that could match more than one host require complete candidate lists. An exact remote match is unsupported, and unresolved or ambiguous matches fail closed. Orca can return null both for idle and for unresolved paired focus; SideNote accepts null as idle only when no paired hosts or contradictory local activity are reported.
 
+If the active ID or focus generation changes during a `notes.focused` request, the worker discards the result and starts one fresh check. The panel stays read-only until a check succeeds. A stable validation failure or an unsuccessful recheck still blocks editing. Note links never restart a check for a different focus.
+
 The panel gates new label and note-store operations on its latest delivered focus check, independently of editor readiness. Existing transfer and deletion confirmations stay pinned to the local store; copying also rechecks the destination before writing.
 
 Create a card's Source editor only when its editing body becomes visible or its first reading-mode task action needs one. Retain the editor, selection, scroll and undo until the card is disposed. Reading-mode links and card controls must not depend on an editor having been created.
