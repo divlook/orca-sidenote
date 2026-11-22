@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.10.1
+
+### Patch Changes
+
+- be54fb5: When the active worktree changes during a focus check, SideNote checks the latest worktree once before showing an error. Editing stays disabled until the worktree is verified.
+
 ## 0.10.0
 
 ### Minor Changes
