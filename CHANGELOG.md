@@ -1,5 +1,11 @@
 # orca-sidenote
 
+## 0.10.2
+
+### Patch Changes
+
+- 385def9: Show the remote worktree notice when SideNote verifies the focused workspace on a paired server, even if that server omits its own pairings.
+
 ## 0.10.1
 
 ### Patch Changes
