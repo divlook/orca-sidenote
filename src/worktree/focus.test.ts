@@ -41,16 +41,39 @@ test('host-qualified local focus needs neither a local active flag nor a paired 
   })
 })
 
-test('both active flags can coexist; raw and host-qualified remote identifiers use their own snapshot', async () => {
+test('both active flags can coexist; nested pairings do not mask a confirmed remote workspace', async () => {
   for (const workspaceId of [remote.worktreeId, 'identity:wt2:runtime%3Apaired-id:remote-instance']) {
     assert.deepEqual(await resolveFocus({
       context: async () => ({ workspaceId }),
       environmentList,
       snapshot: async environment => environment === 'local'
         ? snapshot([local], [paired])
-        : snapshot([remote]),
+        : snapshot([remote], ['runtime:nested-pairing']),
       current: () => true
     }), { kind: 'remote' })
+  }
+})
+
+test('a qualified remote ID checks only its named server and requires one complete match there', async () => {
+  const workspaceId = 'identity:wt2:runtime%3Apaired-id:remote-instance'
+  const sources = {
+    context: async () => ({ workspaceId }),
+    environmentList: async () => environments('paired-id', 'offline'),
+    current: () => true
+  }
+  const check = (reply: unknown) => resolveFocus({
+    ...sources, snapshot: async environment => {
+      if (environment !== 'paired-id') throw new Error('unrelated server unavailable')
+      return reply
+    }
+  })
+  assert.deepEqual(await check(snapshot([remote], ['runtime:offline'])), { kind: 'remote' })
+  for (const reply of [
+    snapshot([]), snapshot([remote, remote]), snapshot([remote], ['local']),
+    snapshot([remote], [paired]), snapshot([{ ...remote, hostId: 'runtime:offline', worktreeId: workspaceId }]),
+    { ok: true, result: { ...snapshot([remote]).result, truncated: true } }
+  ]) {
+    await assert.rejects(check(reply), { message: 'The active worktree could not be verified.' })
   }
 })
 
@@ -73,12 +96,15 @@ test('local folder IDs are valid only once all other candidate sets exclude that
   const setup = {
     context: async () => ({ workspaceId }),
     environmentList,
-    snapshot: async (environment: string) => environment === 'local' ? snapshot([folder], [paired]) : snapshot([remote]),
+    snapshot: async (environment: string) => environment === 'local' ? snapshot([folder], [paired]) : snapshot([remote], ['runtime:nested-pairing']),
     current: () => true
   }
   assert.equal((await resolveFocus(setup))?.kind, 'local')
   await assert.rejects(resolveFocus({
-    ...setup, snapshot: async environment => environment === 'local' ? snapshot([folder], [paired]) : snapshot([folder])
+    ...setup, snapshot: async environment => environment === 'local' ? snapshot([folder], [paired]) : snapshot([folder], ['runtime:nested-pairing'])
+  }))
+  await assert.rejects(resolveFocus({
+    ...setup, snapshot: async environment => environment === 'local' ? snapshot([folder], [paired]) : snapshot([remote], ['ssh:unverified'])
   }))
 })
 

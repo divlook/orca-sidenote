@@ -98,6 +98,10 @@ function matchesPairedRow(row: Workspace, id: string, host: Environment): boolea
     && id === `identity:wt2:${encodeURIComponent(host)}:${encodeURIComponent(row.instanceId)}`
 }
 
+async function readRemoteHosts(sources: FocusSources): Promise<Set<Environment>> {
+  return readPairedHosts(await sources.environmentList())
+}
+
 type FocusSources = {
   context(): Promise<unknown>
   snapshot(environment: string): Promise<unknown>
@@ -106,6 +110,16 @@ type FocusSources = {
 }
 
 async function matchFocus(sources: FocusSources, workspaceId: string | null): Promise<ConfirmedFocus> {
+  const remoteHost = workspaceId?.match(/^identity:wt2:runtime%3A([a-zA-Z0-9_-]+):.+$/)?.[1]
+  if (remoteHost && workspaceId) {
+    const host: Environment = `runtime:${remoteHost}`
+    if (!pairedEnvironment(host) || !(await readRemoteHosts(sources)).has(host)) invalidFocus()
+    const remote = readSnapshot(await sources.snapshot(remoteHost))
+    if (remote.omitted.includes('local') || remote.omitted.includes(host)
+      || remote.rows.filter(row => matchesPairedRow(row, workspaceId, host)
+        && (localHost(row) || row.target.hostId === host)).length !== 1) invalidFocus()
+    return { kind: 'remote' }
+  }
   const local = readSnapshot(await sources.snapshot('local'))
   if (workspaceId === null) {
     // Orca can return null for unresolved paired focus. An empty local catalog may list
@@ -113,7 +127,7 @@ async function matchFocus(sources: FocusSources, workspaceId: string | null): Pr
     // not contribute to the snapshot's omitted-host entries.
     if (local.omitted.some(host => host !== 'local')
       || local.rows.some(row => row.isActive || !localHost(row))) invalidFocus()
-    if (readPairedHosts(await sources.environmentList()).size) invalidFocus()
+    if ((await readRemoteHosts(sources)).size) invalidFocus()
     return null
   }
   const localMatches = local.rows.filter(row => row.id === workspaceId || row.identity === workspaceId)
@@ -125,11 +139,12 @@ async function matchFocus(sources: FocusSources, workspaceId: string | null): Pr
     return localFocus(match, workspaceId)
   }
   // Raw IDs (including folder IDs) can be duplicated across environments.
-  const hosts = readPairedHosts(await sources.environmentList())
+  const hosts = await readRemoteHosts(sources)
   if (local.omitted.some(host => host !== 'local' && (!pairedEnvironment(host) || !hosts.has(host)))) invalidFocus()
   const remotes = await Promise.all([...hosts].map(async host => {
     const remote = readSnapshot(await sources.snapshot(host.slice('runtime:'.length)))
-    if (remote.omitted.some(uncovered => uncovered !== 'local')) invalidFocus()
+    // A paired server does not expose its own pairings to this desktop's sidebar.
+    if (remote.omitted.some(uncovered => uncovered === host || uncovered !== 'local' && !pairedEnvironment(uncovered))) invalidFocus()
     return remote.rows.filter(row => matchesPairedRow(row, workspaceId, host)).length
   }))
   const remoteMatches = remotes.reduce((sum, size) => sum + size, 0)
