@@ -24,6 +24,28 @@ For a focused run, use `npm run test:model`, `npm run test:editor`, or `npm run 
 
 For documentation-only changes, check affected links and headings; check changed commands against current scripts or installed CLI help. Record those checks instead of running builds or behavior tests.
 
+## Installation and activation under team policy
+
+Use Orca v1.4.272 and disposable team-member test profiles. Confirm that the active Orca profile is signed in to its matching Cloud profile and that the test team's [governing policy](https://github.com/stablyai/orca/blob/v1.4.272/src/main/orca-profiles/cloud-auth/active-team-capabilities.ts#L21-L29) applies. Confirm the effective `desktop.plugins` and `plugins.memberSources` settings with the team admin. In **Settings → Plugins → Plugin settings → Development folders…**, corroborate the policy in Orca: **Add path** is enabled in the permitted case; **Development folders are turned off by your team.** should appear in either restricted case. This message does not distinguish the two restrictions. Keep the [local plugin system](https://github.com/stablyai/orca/blob/v1.4.272/src/main/startup/plugin-startup/main-process-plugins.ts#L118-L125) **On** independently of team policy. If you cannot verify the effective policy or keep the local setting **On** without overriding policy, mark that scenario **Not run**.
+
+Test Git, local-folder, and new development-folder loads independently, without an existing SideNote installation or development override. Use a trusted [SideNote distribution](RELEASE.md#prepare-a-distribution) at an exact tag or commit and a complete local export of the same revision. Use the [Add plugin menu](https://github.com/stablyai/orca/blob/v1.4.272/src/renderer/src/components/plugins/list/PluginAddMenu.tsx#L21-L37):
+
+- **Settings → Plugins → Add plugin → From a Git URL…**: enter the repository URL with `#` followed by the exact tag or commit.
+- **Settings → Plugins → Add plugin → From a folder…**: select the matching local export.
+
+If you cannot submit an install through **Add plugin**, record the UI outcome separately; an unavailable control is not an install rejection. To attempt the install against the same active local profile, use the [CLI](https://github.com/stablyai/orca/blob/v1.4.272/src/cli/specs/plugin-install.ts#L16-L38) with the same trusted Git ref or the absolute path to its complete export. Replace `GIT_TAG_OR_COMMIT` and `/path/to/complete/export` before running:
+
+```sh
+/Applications/Orca.app/Contents/Resources/bin/orca plugin install "https://github.com/divlook/orca-sidenote#GIT_TAG_OR_COMMIT" --environment local --json
+/Applications/Orca.app/Contents/Resources/bin/orca plugin install "/path/to/complete/export" --environment local --json
+```
+
+- **Permitted baseline:** Use a policy that allows both `desktop.plugins` and `plugins.memberSources`, with SideNote neither blocked nor required. Follow the normal access approval flow and confirm that **Note** opens after each install. Separately, [load the development folder](DEVELOPMENT.md#load-the-development-folder), open **Note**, and confirm that the **DEV** badge appears.
+- **Restricted installs and new loads:** Run each method twice in separate runs: first with `desktop.plugins` disabled and member-source installs allowed, then with `desktop.plugins` enabled and `plugins.memberSources` disallowed. Expect a submitted Git or local-folder install to be rejected by the [installation policy](https://github.com/stablyai/orca/blob/v1.4.272/src/main/plugins/installation/plugin-team-install-policy.ts). Attempt a new development-folder load with the command in the development guide. Expect it to be [denied before registration](https://github.com/stablyai/orca/blob/v1.4.272/src/main/plugins/development/plugin-dev-folders.ts#L124-L134); confirm its path was not added to **Development folders…**. An expected policy denial is not a failure.
+- **Activation of a registered development folder:** In a separate disposable profile for each restriction, register the trusted folder with both settings permitted, follow the normal access approval flow, and confirm **Note** opens from that development folder. Have the team admin apply the restriction to that same profile. Once it takes effect, confirm that the same path remains registered but **Note** can no longer be opened from it under the [activation policy](https://github.com/stablyai/orca/blob/v1.4.272/src/main/plugins/activation/plugin-activation-policy.ts). A missing **DEV** badge alone does not establish this. If you cannot arrange the policy transition through normal approval or verify the registration and activation states, mark the check **Not run**.
+
+In the change report, keep results separate by run and method. Record the exact Orca version, a non-identifying test profile label, the verified effective policy and local plugin setting, the artifact revision, the UI availability, what you attempted, and the observed outcome. Record the actual error code and exact text when shown, omitting private account details, or note that none was shown. Mark unrun scenarios **Not run**.
+
 ## Manual behavior
 
 Use test notes and an approved disposable panel where native dialogs must be exercised. Use an isolated in-memory host for hostile inputs and injected storage failures.

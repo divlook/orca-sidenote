@@ -74,27 +74,7 @@ Reset preserves note text and note order. It does not assign the recreated label
 
 ## Backup and restore
 
-Labels are note data, not preferences excluded from backup. Backups include the complete label catalog, its order, and note-label assignments, including assignments belonging to recovery collections.
-
-Restore operates on selected note collections in their original exact host/path scopes. It imports only labels needed by collections that it creates or replaces, not every unused label in the backup. Consequently, restoring all notes does not necessarily recreate unused catalog entries.
-
-### Merge labels without changing existing notes
-
-Keep the destination catalog and its order. For each needed incoming label:
-
-| Destination match | Restore behavior |
-| --- | --- |
-| Same normalized name and same palette color | Reuse the existing label |
-| Same normalized name but different palette color | Add a separate label with an available numeric suffix, such as `Bug (2)` |
-| No matching normalized name | Add the incoming label |
-
-Apply the same name-uniqueness rule to generated suffixes. Remap restored notes to the reused or newly added labels. Append new labels in their relative backup order; reused labels retain their destination positions.
-
-Do not overwrite the names, colors, order, or assignments of existing labels used by unselected notes. A partial restore must not change the rest of the shared picker beyond appending imported labels.
-
-### Older backups
-
-Older supported backups contain no label data. Incoming notes from those backups have no label. Replacing an existing collection removes its old assignments rather than copying them onto incoming notes. The destination label catalog remains.
+See [Back up notes](DATA.md#back-up-notes) for what's included in a backup, [Restore notes](DATA.md#restore-notes) for label matching, catalog order, and older backups, and [Copy notes to the current workspace](DATA.md#copy-notes-to-the-current-workspace) for how labels follow copied notes.
 
 ## Storage and integration constraints
 

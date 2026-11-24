@@ -31,6 +31,8 @@ The build deletes and recreates `dist/`. Keep generated bundles, assets, and not
 
 Load only a trusted checkout. The manifest uses `trusted-worker`, which runs Node code with your account permissions. `workspace:read` supports worktree-change events, `workspace:write` lets the worker open worktree files in Orca's editor, and `storage:own` stores notes and settings. Users upgrading from a version without `workspace:write` must review and approve the added access. Later code edits in an approved development folder can run without renewed approval. New capabilities, a higher execution level, or changed commands and shortcuts require renewed approval.
 
+Before loading, confirm that your team allows plugins and member-source installs. In **Settings → Plugins**, make sure the local plugin system is enabled if permitted. If team policy blocks either, ask your team admin for approval before proceeding.
+
 Load the folder into the local environment:
 
 ```sh
@@ -39,7 +41,7 @@ Load the folder into the local environment:
 
 This development folder overrides an installed plugin with the same key. If Orca returns `approval_required` or `approval_stale`, review the requested access and returned command. Rerun that command with its returned fingerprint only if you explicitly approve the access. Do not invent a fingerprint.
 
-Enable plugins in Settings → Plugins. Open **Note** in the right sidebar. The **DEV** badge appears only when the worker confirms its own development installation. It stays hidden if the result is unavailable or inconclusive.
+Open **Note** in the right sidebar. The **DEV** badge appears only when the worker confirms its own development installation. It stays hidden if the result is unavailable or inconclusive.
 
 Orca reloads development files when they change. This repository has no automatic asset-build watcher. Run `npm run build` after changing bundled source or dependencies. If you need an explicit reload, run:
 

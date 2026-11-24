@@ -31,6 +31,7 @@ Disabling needs no approval. Re-enabling a disabled code-running plugin needs ap
 | --- | --- |
 | Save error / `Retry save` | Keep the panel open and preserve the affected collection through a [notes backup](DATA.md#back-up-notes), or copy its content elsewhere. Inspect the error, select **Retry save**, and check whether the error reappears. A recovery collection may exist only in panel memory. |
 | `Location unavailable` / `Switching…` | Check the active worktree and installed CLI path. Run the read-only query below. Incomplete or ambiguous results block editing to protect notes. |
+| **Notes unavailable** | SideNote confirmed the local store but could not load the notes. Copy any visible unsaved draft elsewhere before closing or reloading the panel. A whole-store backup stops if it cannot read a stored collection; it does not produce a partial backup. |
 | Editor initialization or transaction error | Check the panel bundle and build errors. Preserve unsaved content before rebuilding or reloading. Keep fail-closed editor readiness enabled. |
 | Preference error | Inspect the settings error. Use the explicit replacement procedure in [Usage](USAGE.md#note-settings). Do not reset note storage. |
 | Note link error | Inspect the error. A failed link must not clear the note or disable editing. |
